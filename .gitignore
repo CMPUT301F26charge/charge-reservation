@@ -32,3 +32,10 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Kotlin-generated project data
+.kotlin/
+
+# Operating system files
+.DS_Store
+Thumbs.db
