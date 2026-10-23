@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "462546135602",
+    "project_id": "charge-reservation",
+    "storage_bucket": "charge-reservation.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:462546135602:android:8156e5ef20ecf5b621aa2b",
+        "android_client_info": {
+          "package_name": "com.charge.reservation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAI4zVk_J6Khx14goSasoitOz92g6wOa9Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
