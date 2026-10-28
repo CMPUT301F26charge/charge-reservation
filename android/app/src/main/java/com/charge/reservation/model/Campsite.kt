@@ -6,7 +6,7 @@ package com.charge.reservation.model
  * Availability and individual rating records are stored separately
  * and linked to this campsite through its ID.
  *
- * @property id the unique identifier of the campsite
+ * @property id the ID of the campsite
  * @property ownerId the profile ID of the campsite's owner
  * @property name the displayed campsite name
  * @property description the description of the campsite and its amenities
