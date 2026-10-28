@@ -12,7 +12,7 @@ import java.time.ZoneId
  *
  * @property id the ID of the lottery
  * @property ownerId the ID of the owner managing the lottery
- * @property campsiteIds the ID of campsites included in the lottery
+ * @property campsiteIds the IDs of campsites included in the lottery
  * @property registrationStartAt the instant when registration opens
  * @property registrationEndAt the instant when registration closes
  * @property bookingDeadline the instant by which winners must use their invitation
