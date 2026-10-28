@@ -13,7 +13,7 @@ package com.charge.reservation.model
  * @property promoImageUrls the promotional image URLs, or an empty list if absent
  * @property tags the descriptive labels associated with the campsite
  * @property maxOccupancy the maximum number of guests, or null if not provided
- * @property pricePerNight the nightly price in dollars, or null if not provided
+ * @property pricePerNight the price per night, or null if not provided
  * @property averageRating the calculated average score, or null if no ratings exist
  * @property removed whether the campsite has been removed from active listings
  * @property rules the rules guests must follow
