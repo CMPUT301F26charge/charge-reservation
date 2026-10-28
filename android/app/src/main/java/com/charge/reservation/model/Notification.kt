@@ -4,7 +4,7 @@ import java.time.Instant
 
 /**
  * Represents a notification for one recipient and tracks its sending state.
- **
+ *
  * @property id the ID of the notification
  * @property senderId the ID of the owner who wrote the announcement,
  * or null for system notifications
