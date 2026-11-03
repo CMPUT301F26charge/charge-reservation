@@ -9,10 +9,10 @@ import androidx.navigation.compose.rememberNavController
 //use navcontroller to navigate to different ui displays (similar to how lab 7 works)
 //this is the only function called in MainActivity
 @Composable
-fun CampsiteApp() {
-    val navcontroller = rememberNavController()
+fun AppNavigation() {
+    val navController = rememberNavController()
 
-    NavHost(navController = navcontroller, startDestination = "home") {
-        composable("home") {HomeScreen(navcontroller)} //home screen ui
+    NavHost(navController = navController, startDestination = "home") {
+        composable("home") {HomeScreen(navController)} //home screen ui
     }
 }
