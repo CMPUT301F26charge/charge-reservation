@@ -1,13 +1,17 @@
 package com.charge.reservation.repository
 
-import com.charge.reservation.model.Campsite
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.FirebaseFirestore
+
+import com.charge.reservation.model.Campsite
 
 /**
  * Handles campsite listings stored in Firestore.
  */
 class CampsiteRepository {
     private val firestore = FirebaseFirestore.getInstance()
+
+    
 
     /**
      * Creates a campsite using its ID as the document ID.
@@ -89,5 +93,49 @@ class CampsiteRepository {
             onFailure(exception)
         }
     }
-    
+
+    /**
+     * Listens for active campsite listings belonging to an owner.
+     *
+     * @param ownerId the signed-in owner's Firebase Authentication UID.
+     * @param onSuccess receives the current list whenever it changes.
+     * @param onFailure receives Firestore or data conversion errors.
+     * @return the listener registration, remove it when no longer needed.
+     */
+
+    fun listenToOwnerCampsites(
+        ownerId: String,
+        onSuccess: (List<Campsite>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ): ListenerRegistration {
+        return firestore.collection("campsites")
+            .whereEqualTo("ownerId", ownerId)
+            .whereEqualTo("removed", false)
+            .addSnapshotListener { snapshot, exception ->
+                if (exception != null) {
+                    onFailure(exception)
+                    return@addSnapshotListener
+                }
+
+                val campsites = mutableListOf<Campsite>()
+                try {
+                    if (snapshot != null) {
+                        for (document in snapshot.documents) {
+                            // Convert the document into a Campsite.
+                            val campsite = document.toObject(Campsite::class.java)
+
+                            if (campsite != null) {
+                                val campsiteWithId = campsite.copy(id = document.id)
+                                campsites.add(campsiteWithId)
+                            }
+                        }
+                    }
+                } catch (exception: Exception) {
+                    onFailure(exception)
+                    return@addSnapshotListener
+                }
+
+                onSuccess(campsites)
+            }
+    }
 }
