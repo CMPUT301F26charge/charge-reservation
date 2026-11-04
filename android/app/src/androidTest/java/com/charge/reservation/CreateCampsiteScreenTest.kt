@@ -51,6 +51,10 @@ class CreateCampsiteScreenTest {
             .performScrollTo()
             .performTextInput("  Edmonton, Alberta  ")
 
+        composeRule.onNodeWithText("Maximum occupancy")
+            .performScrollTo()
+            .performTextInput("  4  ")
+
         composeRule.onNodeWithText("Rules")
             .performScrollTo()
             .performTextInput("  Keep the site clean.  ")
@@ -71,6 +75,7 @@ class CreateCampsiteScreenTest {
             assertEquals("Test Campsite", campsite?.name)
             assertEquals("Test Description.", campsite?.description)
             assertEquals("Edmonton, Alberta", campsite?.location)
+            assertEquals(4, campsite?.maxOccupancy)
             assertEquals("Keep the site clean.", campsite?.rules)
             assertEquals(
                 "Cancel before check-in.",

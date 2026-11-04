@@ -26,8 +26,6 @@ import com.charge.reservation.model.Campsite
  *
  * Removed campsites and listings belonging to other owners
  * are excluded.
- *
- * Outstanding: Connect to the authenticated owner's data.
  */
 @Composable
 fun OwnerCampsiteListScreen(

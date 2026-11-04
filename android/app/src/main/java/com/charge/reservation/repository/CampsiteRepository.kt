@@ -44,6 +44,8 @@ class CampsiteRepository {
 
             campsite.location.isBlank() -> "Please enter the campsite location."
 
+            (campsite.maxOccupancy ?: 0) <= 0 -> "Please enter a positive whole number for maximum occupancy."
+
             campsite.rules.isBlank() -> "Please enter the campsite rules."
 
             campsite.cancellationPolicy.isBlank() -> "Please enter the cancellation policy."
