@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
 
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import com.charge.reservation.controller.AppLaunchState
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when (val state = appLaunchState) {
                             AppLaunchState.Loading -> CircularProgressIndicator()
+
                             is AppLaunchState.CreateProfile -> {
                                 CreateProfileScreen(
                                     onCreateProfile = { name, email, phoneNumber ->
@@ -108,8 +110,13 @@ class MainActivity : ComponentActivity() {
                                 )
 
                             }
-                            is AppLaunchState.ProfileReady -> AppNavigation()
+
+                            is AppLaunchState.ProfileReady -> {
+                                AppNavigation(profile = state.profile)
+                            }
+
                             AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
+
                             is AppLaunchState.Error -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally

@@ -11,7 +11,12 @@ import com.charge.reservation.model.Campsite
 class CampsiteRepository {
     private val firestore = FirebaseFirestore.getInstance()
 
-    
+    /**
+     * Generates a new campsite ID.
+     */
+    fun generateCampsiteId(): String {
+        return firestore.collection("campsites").document().id
+    }
 
     /**
      * Creates a campsite using its ID as the document ID.
