@@ -23,6 +23,11 @@ import com.charge.reservation.repository.AuthRepository
 import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.model.UserProfile
 
+/**
+ * Signs in anonymously and loads the user's Firestore profile.
+ * Displays profile setup, the main app, a removed profile message,
+ * or an error with retry.
+ */
 class MainActivity : ComponentActivity() {
     private val authRepository = AuthRepository()
     private val userProfileRepository = UserProfileRepository()
