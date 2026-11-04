@@ -39,9 +39,11 @@ fun CreateCampsiteScreen(
     var name by rememberSaveable(campsiteId) { mutableStateOf("") }
     var description by rememberSaveable(campsiteId) { mutableStateOf("") }
     var location by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var maxOccupancy by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var pricePerNight by rememberSaveable(campsiteId) { mutableStateOf("") }
     var rules by rememberSaveable(campsiteId) { mutableStateOf("") }
     var cancellationPolicy by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var maxOccupancy by rememberSaveable(campsiteId) { mutableStateOf("") }
+
 
     Column(
         modifier = Modifier
@@ -93,6 +95,15 @@ fun CreateCampsiteScreen(
         )
 
         OutlinedTextField(
+            value = pricePerNight,
+            onValueChange = { pricePerNight = it },
+            label = { Text("Price per night") },
+            singleLine = true,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
             value = rules,
             onValueChange = { rules = it },
             label = { Text("Rules") },
@@ -127,6 +138,7 @@ fun CreateCampsiteScreen(
                     description = description.trim(),
                     location = location.trim(),
                     maxOccupancy = maxOccupancy.trim().toIntOrNull(),
+                    pricePerNight = pricePerNight.trim().toDoubleOrNull(),
                     rules = rules.trim(),
                     cancellationPolicy = cancellationPolicy.trim()
                 )

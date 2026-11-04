@@ -94,7 +94,7 @@ fun OwnerCampsiteListScreen(
                             Text(campsite.location)
 
                             campsite.maxOccupancy?.let {
-                                Text("Up to $it guests")
+                                Text("Maximum occupancy: $it guests")
                             }
                         }
                     }
