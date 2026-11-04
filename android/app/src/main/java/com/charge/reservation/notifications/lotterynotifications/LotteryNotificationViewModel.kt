@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.notifications.lotterynotifications
 
 import android.util.Log
 import androidx.lifecycle.ViewModel

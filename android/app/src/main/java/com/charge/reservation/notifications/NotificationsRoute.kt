@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.notifications
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

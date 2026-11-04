@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.notifications.lotterynotifications
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box

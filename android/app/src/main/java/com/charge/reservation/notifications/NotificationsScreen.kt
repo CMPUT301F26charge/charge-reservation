@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.notifications
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background

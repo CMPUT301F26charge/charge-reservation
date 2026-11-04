@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.notifications
 
 import com.charge.reservation.model.Notification
 import com.charge.reservation.model.NotificationSendStatus

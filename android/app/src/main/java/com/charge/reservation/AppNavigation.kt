@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.charge.reservation.model.UserProfile
+import com.charge.reservation.notifications.NotificationsRoute
 
 
 //use navcontroller to navigate to different ui displays (similar to how lab 7 works)
@@ -15,8 +16,10 @@ fun AppNavigation() {
 
     NavHost(navController = navController, startDestination = "home") {
         composable("home") {HomeScreen(navController)} //home screen ui
-        composable("notifications") {(NotificationsRoute(userId = UserProfile.id,
-        onOpenLottery = { lotteryId: String -> Unit}, navController))}
+        composable("notifications") {(NotificationsRoute(
+            userId = UserProfile.id,
+            onOpenLottery = { lotteryId: String -> Unit }, navController
+        ))}
         //todo: properly call
     }
 }
