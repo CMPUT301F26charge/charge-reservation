@@ -119,8 +119,8 @@ class UserProfileRepository {
             }
         }
 
-        readTask.addOnFailureListener { exception ->
-            onFailure(exception)
+        readTask.addOnFailureListener {
+            exception -> onFailure(exception)
         }
     }
 }

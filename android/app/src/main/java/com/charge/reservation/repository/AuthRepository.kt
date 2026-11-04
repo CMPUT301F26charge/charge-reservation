@@ -45,8 +45,8 @@ class AuthRepository {
             }
         }
 
-        signInTask.addOnFailureListener { exception ->
-            onFailure(exception)
+        signInTask.addOnFailureListener {
+            exception -> onFailure(exception)
         }
     }
 

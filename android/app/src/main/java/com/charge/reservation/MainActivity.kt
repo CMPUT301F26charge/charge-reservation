@@ -8,34 +8,39 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
 
 import com.charge.reservation.controller.AppLaunchState
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import com.charge.reservation.repository.AuthRepository
 import com.charge.reservation.repository.UserProfileRepository
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
     private val authRepository = AuthRepository()
     private val userProfileRepository = UserProfileRepository()
     private var appLaunchState by mutableStateOf<AppLaunchState>(AppLaunchState.Loading)
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    private fun launchApp() {
+        appLaunchState = AppLaunchState.Loading
+
         authRepository.getOrCreateUserId(
             onSuccess = { userId ->
-                Log.d("Authentication", "User ID: $userId" )
+                Log.d("Authentication", "User ID: $userId")
+
                 userProfileRepository.getProfile(
-                    userId = userId,
+                    userId,
                     onSuccess = { profile ->
                         appLaunchState = when {
-                            profile == null ->
-                                AppLaunchState.CreateProfile(userId)
-
-                            profile.removed ->
-                                AppLaunchState.ProfileRemoved
-
-                            else ->
-                                AppLaunchState.ProfileReady(profile)
+                            profile == null -> AppLaunchState.CreateProfile(userId)
+                            profile.removed -> AppLaunchState.ProfileRemoved
+                            else -> AppLaunchState.ProfileReady(profile)
                         }
                     },
                     onFailure = { exception ->
@@ -49,11 +54,41 @@ class MainActivity : ComponentActivity() {
                 appLaunchState = AppLaunchState.Error("Can not sign in. Please try again.")
             }
         )
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        launchApp()
 
         enableEdgeToEdge()
+
         setContent {
             ChargeReservationTheme {
-                AppNavigation()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when (val state = appLaunchState) {
+                        AppLaunchState.Loading -> CircularProgressIndicator()
+                        is AppLaunchState.CreateProfile ->  Text("Please create your profile.")
+                        is AppLaunchState.ProfileReady -> AppNavigation()
+                        AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
+                        is AppLaunchState.Error -> {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(state.message)
+
+                                Button(
+                                    onClick = { launchApp() }
+                                ) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
