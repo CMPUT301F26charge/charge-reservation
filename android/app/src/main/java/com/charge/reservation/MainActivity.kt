@@ -10,17 +10,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
-
-import com.charge.reservation.controller.AppLaunchState
-import com.charge.reservation.ui.theme.ChargeReservationTheme
-import com.charge.reservation.repository.AuthRepository
-import com.charge.reservation.repository.UserProfileRepository
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+
+import com.charge.reservation.ui.theme.ChargeReservationTheme
+import com.charge.reservation.controller.AppLaunchState
+import com.charge.reservation.repository.AuthRepository
+import com.charge.reservation.repository.UserProfileRepository
+import com.charge.reservation.model.UserProfile
 
 class MainActivity : ComponentActivity() {
     private val authRepository = AuthRepository()
@@ -71,7 +72,31 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when (val state = appLaunchState) {
                         AppLaunchState.Loading -> CircularProgressIndicator()
-                        is AppLaunchState.CreateProfile ->  Text("Please create your profile.")
+                        is AppLaunchState.CreateProfile -> {
+                            CreateProfileScreen(
+                                onCreateProfile = { name, email, phoneNumber ->
+                                    val profile = UserProfile(
+                                        id = state.userId,
+                                        name = name,
+                                        email = email,
+                                        phoneNumber = phoneNumber
+                                    )
+
+                                    appLaunchState = AppLaunchState.Loading
+
+                                    userProfileRepository.createProfile(
+                                        profile = profile,
+                                        onSuccess = {launchApp()},
+                                        onFailure = { exception ->
+                                            Log.e("ProfileCreation", "Can not create the profile", exception)
+                                            appLaunchState = AppLaunchState.Error("Can not create your profile. Please try again.")
+                                        }
+                                    )
+
+                                }
+                            )
+
+                        }
                         is AppLaunchState.ProfileReady -> AppNavigation()
                         AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
                         is AppLaunchState.Error -> {
