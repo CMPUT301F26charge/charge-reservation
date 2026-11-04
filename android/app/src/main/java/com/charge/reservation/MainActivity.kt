@@ -5,14 +5,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+import com.charge.reservation.controller.AppLaunchState
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import com.charge.reservation.repository.AuthRepository
 import com.charge.reservation.repository.UserProfileRepository
-import com.charge.reservation.model.UserProfile
 
 class MainActivity : ComponentActivity() {
     private val authRepository = AuthRepository()
     private val userProfileRepository = UserProfileRepository()
+    private var appLaunchState by mutableStateOf<AppLaunchState>(AppLaunchState.Loading)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,28 +27,26 @@ class MainActivity : ComponentActivity() {
                 userProfileRepository.getProfile(
                     userId = userId,
                     onSuccess = { profile ->
-                        when {
-                            profile == null -> {
-                                Log.d("ProfileLoading", "No profile exists for this user.")
-                            }
+                        appLaunchState = when {
+                            profile == null ->
+                                AppLaunchState.CreateProfile(userId)
 
-                            profile.removed -> {
-                                Log.d("ProfileLoading", "This profile is removed.")
-                            }
+                            profile.removed ->
+                                AppLaunchState.ProfileRemoved
 
-                            else -> {
-                                Log.d("ProfileLoading", "Loaded profile ID: ${profile.id}, name:${profile.name}")
-                            }
+                            else ->
+                                AppLaunchState.ProfileReady(profile)
                         }
-
                     },
                     onFailure = { exception ->
                         Log.e("ProfileLoading", "Can not load the profile", exception)
+                        appLaunchState = AppLaunchState.Error("Can not load your profile. Please try again.")
                     }
                 )
             },
             onFailure = { exception ->
                 Log.e("Authentication", "Authentication failed", exception)
+                appLaunchState = AppLaunchState.Error("Can not sign in. Please try again.")
             }
         )
 
