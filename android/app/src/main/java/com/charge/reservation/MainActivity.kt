@@ -16,6 +16,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import com.charge.reservation.controller.AppLaunchState
@@ -71,54 +73,60 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ChargeReservationTheme {
-                Box(
+                Surface(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    when (val state = appLaunchState) {
-                        AppLaunchState.Loading -> CircularProgressIndicator()
-                        is AppLaunchState.CreateProfile -> {
-                            CreateProfileScreen(
-                                onCreateProfile = { name, email, phoneNumber ->
-                                    val profile = UserProfile(
-                                        id = state.userId,
-                                        name = name,
-                                        email = email,
-                                        phoneNumber = phoneNumber
-                                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when (val state = appLaunchState) {
+                            AppLaunchState.Loading -> CircularProgressIndicator()
+                            is AppLaunchState.CreateProfile -> {
+                                CreateProfileScreen(
+                                    onCreateProfile = { name, email, phoneNumber ->
+                                        val profile = UserProfile(
+                                            id = state.userId,
+                                            name = name,
+                                            email = email,
+                                            phoneNumber = phoneNumber
+                                        )
 
-                                    appLaunchState = AppLaunchState.Loading
+                                        appLaunchState = AppLaunchState.Loading
 
-                                    userProfileRepository.createProfile(
-                                        profile = profile,
-                                        onSuccess = {launchApp()},
-                                        onFailure = { exception ->
-                                            Log.e("ProfileCreation", "Can not create the profile", exception)
-                                            appLaunchState = AppLaunchState.Error("Can not create your profile. Please try again.")
-                                        }
-                                    )
+                                        userProfileRepository.createProfile(
+                                            profile = profile,
+                                            onSuccess = {launchApp()},
+                                            onFailure = { exception ->
+                                                Log.e("ProfileCreation", "Can not create the profile", exception)
+                                                appLaunchState = AppLaunchState.Error("Can not create your profile. Please try again.")
+                                            }
+                                        )
 
-                                }
-                            )
+                                    }
+                                )
 
-                        }
-                        is AppLaunchState.ProfileReady -> AppNavigation()
-                        AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
-                        is AppLaunchState.Error -> {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(state.message)
-
-                                Button(
-                                    onClick = { launchApp() }
+                            }
+                            is AppLaunchState.ProfileReady -> AppNavigation()
+                            AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
+                            is AppLaunchState.Error -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text("Retry")
+                                    Text(state.message)
+
+                                    Button(
+                                        onClick = { launchApp() }
+                                    ) {
+                                        Text("Retry")
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
             }
         }
     }

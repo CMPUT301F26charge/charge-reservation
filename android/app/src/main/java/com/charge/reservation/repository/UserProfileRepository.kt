@@ -102,7 +102,7 @@ class UserProfileRepository {
                         email = document.getString("email") ?: "",
                         phoneNumber = document.getString("phoneNumber") ?: "",
                         profileImageUrl = document.getString("profileImageUrl"),
-                        notificationEnabled = document.getBoolean("notificationEnabled") ?: false,
+                        notificationEnabled = document.getBoolean("notificationEnabled") ?: true,
                         isEntrant = document.getBoolean("isEntrant") ?: true,
                         isOwner = document.getBoolean("isOwner") ?: false,
                         isAdmin = document.getBoolean("isAdmin") ?: false,
