@@ -24,6 +24,7 @@ class AuthRepository {
         onSuccess: (String) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
+        // Use the existing Firebase user if user already signed in.
         val existingUser = auth.currentUser
 
         if (existingUser != null) {

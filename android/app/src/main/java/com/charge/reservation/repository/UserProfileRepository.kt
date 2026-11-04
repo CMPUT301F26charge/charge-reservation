@@ -47,6 +47,7 @@ class UserProfileRepository {
             "removed" to false
         )
 
+        // Check document existence and create the document.
         val creationTask = firestore.runTransaction { transaction ->
             val snapshot = transaction.get(profileDocument)
 
@@ -91,6 +92,7 @@ class UserProfileRepository {
 
         val profileDocument = firestore.collection("users").document(userId)
 
+        // Check the server for the current profile and removal status.
         val readTask = profileDocument.get(Source.SERVER)
 
         readTask.addOnSuccessListener { document ->
@@ -102,7 +104,8 @@ class UserProfileRepository {
                         email = document.getString("email") ?: "",
                         phoneNumber = document.getString("phoneNumber") ?: "",
                         profileImageUrl = document.getString("profileImageUrl"),
-                        notificationEnabled = document.getBoolean("notificationEnabled") ?: false,
+                        notificationEnabled = document.getBoolean("notificationEnabled") ?: true,
+                        // New profiles always start with entrant access.
                         isEntrant = document.getBoolean("isEntrant") ?: true,
                         isOwner = document.getBoolean("isOwner") ?: false,
                         isAdmin = document.getBoolean("isAdmin") ?: false,
