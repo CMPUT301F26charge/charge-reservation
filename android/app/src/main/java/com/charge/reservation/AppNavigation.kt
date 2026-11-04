@@ -11,7 +11,18 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import android.net.Uri
 
+import com.charge.reservation.owner.OwnerCampsiteDetailsScreen
+import com.charge.reservation.model.Campsite
+import com.charge.reservation.owner.OwnerCampsiteListScreen
 import com.charge.reservation.model.UserProfile
 import com.charge.reservation.repository.CampsiteRepository
 
@@ -24,9 +35,49 @@ fun AppNavigation(profile: UserProfile) {
     val navController = rememberNavController()
     val campsiteRepository = remember { CampsiteRepository() }
 
+    var ownerCampsites by remember(profile.id) {
+        mutableStateOf<List<Campsite>>(emptyList())
+    }
+    var isLoadingOwnerCampsites by remember(profile.id) {
+        mutableStateOf(true)
+    }
+    var ownerCampsitesError by remember(profile.id) {
+        mutableStateOf("")
+    }
+    var ownerListRetry by remember(profile.id) {
+        mutableStateOf(0)
+    }
+
+    if (profile.isOwner && !profile.removed) {
+        DisposableEffect(profile.id, campsiteRepository, ownerListRetry) {
+            isLoadingOwnerCampsites = true
+            ownerCampsitesError = ""
+
+            val listener = campsiteRepository.listenToOwnerCampsites(
+                ownerId = profile.id,
+                onSuccess = { campsites ->
+                    ownerCampsites = campsites
+                    ownerCampsitesError = ""
+                    isLoadingOwnerCampsites = false
+                },
+                onFailure = { exception ->
+                    Log.e("OwnerCampsites","Can not load owner campsites",exception)
+
+                    ownerCampsites = emptyList()
+                    ownerCampsitesError = "Can not load your campsites. Please try again."
+                    isLoadingOwnerCampsites = false
+                }
+            )
+
+            onDispose { listener.remove() }
+        }
+    }
+
     NavHost(
         navController = navController,
-        startDestination = "home"
+        startDestination = "home",
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
         composable("home") {
             HomeScreen(
@@ -35,9 +86,102 @@ fun AppNavigation(profile: UserProfile) {
             )
         }
 
+        composable ("ownerCampsites"){
+            if (!profile.isOwner || profile.removed) {
+                Text("Only active owners can view their campsite listings.")
+            } else {
+                when {
+                    isLoadingOwnerCampsites -> {
+                        CircularProgressIndicator()
+                    }
+
+                    ownerCampsitesError.isNotEmpty() -> {
+                        Column {
+                            Text(ownerCampsitesError)
+
+                            Button(
+                                onClick = { ownerListRetry++ }
+                            ) {
+                                Text("Retry")
+                            }
+
+                            Button (
+                                onClick = { navController.popBackStack() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+
+                    else -> {
+                        OwnerCampsiteListScreen(
+                            currentOwnerId = profile.id,
+                            campsites = ownerCampsites,
+                            onCampsiteClick = { campsiteId ->
+                                navController.navigate(
+                                    "ownerCampsiteDetails/${Uri.encode(campsiteId)}"
+                                )
+                            },
+                            onBackClick = {
+                                navController.popBackStack()
+                            },
+                            onRegisterCampsiteClick = {
+                                navController.navigate("createCampsite")
+                            }
+                        )
+                    }
+                }
+
+
+            }
+        }
+
+        composable("ownerCampsiteDetails/{campsiteId}") { entry ->
+            val campsiteId = entry.arguments?.getString("campsiteId")
+
+            when {
+                !profile.isOwner || profile.removed -> {
+                    Text("Only campsite owners can view their campsite listings.")
+                }
+
+                isLoadingOwnerCampsites -> {
+                    CircularProgressIndicator()
+                }
+
+                ownerCampsitesError.isNotEmpty() -> {
+                    Column {
+                        Text(ownerCampsitesError)
+
+                        Button(onClick = { ownerListRetry++ }) {
+                            Text("Retry")
+                        }
+
+                        Button(
+                            onClick = { navController.popBackStack() }
+                        ) {
+                            Text("Back")
+                        }
+                    }
+                }
+
+                else -> {
+                    val campsite = ownerCampsites.find {
+                        it.id == campsiteId
+                    }
+
+                    OwnerCampsiteDetailsScreen(
+                        campsite = campsite,
+                        onBackClick = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+            }
+        }
+
         composable("createCampsite") { entry ->
             if (!profile.isOwner || profile.removed) {
-                Text("Only active owners can register a campsite.")
+                Text("Only campsite owners can register a campsite.")
             } else {
                 val campsiteId = rememberSaveable(profile.id) {
                     campsiteRepository.generateCampsiteId()
@@ -66,7 +210,7 @@ fun AppNavigation(profile: UserProfile) {
                                     }
                                 },
                                 onFailure = { exception ->
-                                    Log.e("CampsiteCreation", "Could not create the campsite", exception)
+                                    Log.e("CampsiteCreation", "Can not create campsite", exception)
 
                                     isSaving = false
                                     errorMessage =
@@ -74,7 +218,7 @@ fun AppNavigation(profile: UserProfile) {
                                             exception.message
                                                 ?: "Please check the campsite details."
                                         } else {
-                                            "Could not create the campsite. Please try again."
+                                            "Can not create campsite. Please try again."
                                         }
                                 }
                             )
