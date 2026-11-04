@@ -24,5 +24,6 @@ data class UserProfile(
 
     val isEntrant: Boolean = true,
     val isOwner: Boolean = false,
-    val isAdmin: Boolean = false
+    val isAdmin: Boolean = false,
+    val removed: Boolean = false
 )
