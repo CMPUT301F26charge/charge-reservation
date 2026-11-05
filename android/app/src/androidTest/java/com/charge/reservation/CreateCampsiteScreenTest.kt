@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.charge.reservation.model.Campsite
+import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule

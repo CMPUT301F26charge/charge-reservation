@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.owner
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
