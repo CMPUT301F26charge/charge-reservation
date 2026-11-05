@@ -2,6 +2,8 @@ package com.charge.reservation.repository
 
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+import java.time.LocalDate
 
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
@@ -194,6 +196,54 @@ class CampsiteRepository {
                 }
 
                 onSuccess(campsites)
+            }
+    }
+
+    /**
+     * Loads the selected campsite's saved nightly availability once.
+     */
+    fun getAvailability(
+        campsiteId: String,
+        onSuccess: (List<AvailabilityDay>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        firestore.collection("campsites")
+            .document(campsiteId)
+            .collection("availability")
+            .get(Source.SERVER)
+            .addOnSuccessListener { snapshot ->
+                val days = try {
+                    snapshot.documents.map { document ->
+                        val date = LocalDate.parse(
+                            requireNotNull(document.getString("date"))
+                        )
+                        val capacity = Math.toIntExact(
+                            requireNotNull(document.getLong("guestCapacity"))
+                        )
+                        val booked = Math.toIntExact(
+                            requireNotNull(document.getLong("bookedGuests"))
+                        )
+
+                        require(document.id == date.toString())
+                        require(document.getString("campsiteId") == campsiteId)
+                        require(capacity >= 0 && booked in 0..capacity)
+
+                        AvailabilityDay(
+                            campsiteId = campsiteId,
+                            date = date,
+                            guestCapacity = capacity,
+                            bookedGuests = booked
+                        )
+                    }.sortedBy { it.date }
+                } catch (exception: Exception) {
+                    onFailure(exception)
+                    return@addOnSuccessListener
+                }
+
+                onSuccess(days)
+            }
+            .addOnFailureListener { exception ->
+                onFailure(exception)
             }
     }
 }
