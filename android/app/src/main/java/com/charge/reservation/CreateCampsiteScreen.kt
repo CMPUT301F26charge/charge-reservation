@@ -19,8 +19,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.InputChip
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
+import java.time.Instant
+import java.time.ZoneOffset
 
 import com.charge.reservation.model.Campsite
+import java.util.Date
 
 /**
  * Collects initial campsite details and passes them to the caller.
@@ -29,6 +38,7 @@ import com.charge.reservation.model.Campsite
  * and provides saving progress and error messages.
  */
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateCampsiteScreen(
     ownerId: String,
@@ -48,6 +58,13 @@ fun CreateCampsiteScreen(
     var tags by rememberSaveable(campsiteId) { mutableStateOf<List<String>>(emptyList()) }
     var rules by rememberSaveable(campsiteId) { mutableStateOf("") }
     var cancellationPolicy by rememberSaveable(campsiteId) { mutableStateOf("") }
+
+    var showCalendar by rememberSaveable(campsiteId) {
+        mutableStateOf(false)
+    }
+    var availableNights by rememberSaveable(campsiteId) {
+        mutableStateOf<List<String>>(emptyList())
+    }
 
 
     Column(
@@ -125,6 +142,29 @@ fun CreateCampsiteScreen(
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Button(
+            enabled = !isSaving,
+            onClick = { showCalendar = true }
+        ) {
+            Text("Add available nights")
+        }
+
+        if (availableNights.isNotEmpty()) {
+            Text("Selected dates (tap to remove)")
+
+            availableNights.forEach { night ->
+                InputChip(
+                    selected = true,
+                    enabled = !isSaving,
+                    onClick = {
+                        availableNights = availableNights - night
+                    },
+                    label = { Text(night) },
+                    trailingIcon = { Text("×") }
+                )
+            }
+        }
 
         OutlinedTextField(
             value = tagInput,
@@ -216,6 +256,60 @@ fun CreateCampsiteScreen(
             Text(if (isSaving) "Saving..." else "Create Campsite")
         }
 
+        if (showCalendar) {
+            val pickerState = rememberDateRangePickerState()
+
+            DatePickerDialog(
+                onDismissRequest = { showCalendar = false },
+                confirmButton = {
+                    TextButton(
+                        enabled = !isSaving &&
+                                pickerState.selectedStartDateMillis != null,
+                        onClick = {
+                            val startMillis = pickerState.selectedStartDateMillis
+
+                            if (startMillis != null) {
+                                val endMillis =
+                                    pickerState.selectedEndDateMillis ?: startMillis
+
+                                val firstNight = Instant.ofEpochMilli(startMillis)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate()
+
+                                val lastNight = Instant.ofEpochMilli(endMillis)
+                                    .atZone(ZoneOffset.UTC)
+                                    .toLocalDate()
+
+                                val addedNights = mutableListOf<String>()
+                                var night = firstNight
+
+                                while (!night.isAfter(lastNight)) {
+                                    addedNights.add(night.toString())
+                                    night = night.plusDays(1)
+                                }
+
+                                availableNights = (availableNights + addedNights)
+                                    .distinct()
+                                    .sorted()
+
+                                showCalendar = false
+                            }
+                        }
+                    ) {
+                        Text("Confirm")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCalendar = false }) {
+                        Text("Cancel")
+                    }
+                }
+            ) {
+                DateRangePicker(
+                    state = pickerState,
+                    modifier = Modifier.heightIn(max = 480.dp)
+                )
+            }
+        }
     }
 }
-
