@@ -26,6 +26,7 @@ import com.charge.reservation.owner.OwnerCampsiteListScreen
 import com.charge.reservation.model.UserProfile
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.AvailabilityDay
+import com.charge.reservation.owner.CreateCampsiteScreen
 
 
 /**
@@ -246,7 +247,7 @@ fun AppNavigation(profile: UserProfile) {
                     campsiteId = campsiteId,
                     isSaving = isSaving,
                     errorMessage = errorMessage,
-                    onCreateCampsite = { campsite, availabilityDays, imageUri  ->
+                    onCreateCampsite = { campsite, availabilityDays, imageUri ->
                         if (!isSaving) {
                             isSaving = true
                             errorMessage = ""

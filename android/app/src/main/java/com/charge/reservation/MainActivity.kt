@@ -18,13 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
 
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import com.charge.reservation.controller.AppLaunchState
 import com.charge.reservation.repository.AuthRepository
 import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.model.UserProfile
+import com.charge.reservation.profile.CreateProfileScreen
 
 /**
  * Signs in anonymously and loads the user's Firestore profile.
@@ -99,10 +99,15 @@ class MainActivity : ComponentActivity() {
 
                                         userProfileRepository.createProfile(
                                             profile = profile,
-                                            onSuccess = {launchApp()},
+                                            onSuccess = { launchApp() },
                                             onFailure = { exception ->
-                                                Log.e("ProfileCreation", "Can not create the profile", exception)
-                                                appLaunchState = AppLaunchState.Error("Can not create your profile. Please try again.")
+                                                Log.e(
+                                                    "ProfileCreation",
+                                                    "Can not create the profile",
+                                                    exception
+                                                )
+                                                appLaunchState =
+                                                    AppLaunchState.Error("Can not create your profile. Please try again.")
                                             }
                                         )
 
