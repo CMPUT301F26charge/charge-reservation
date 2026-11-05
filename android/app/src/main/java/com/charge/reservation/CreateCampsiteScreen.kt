@@ -28,6 +28,12 @@ import androidx.compose.material3.rememberDateRangePickerState
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.LocalDate
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
@@ -69,6 +75,16 @@ fun CreateCampsiteScreen(
     var nightlyCapacity by rememberSaveable(campsiteId) {
         mutableStateOf(hashMapOf<String, String>())
     }
+    var selectedImageUri by rememberSaveable(campsiteId) {
+        mutableStateOf<String?>(null)
+    }
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            selectedImageUri = uri.toString()
+        }
+    }
 
 
     Column(
@@ -101,6 +117,45 @@ fun CreateCampsiteScreen(
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Text("Promotional image")
+
+        Button(
+            enabled = !isSaving,
+            onClick = {
+                imagePicker.launch(
+                    PickVisualMediaRequest(
+                        ActivityResultContracts.PickVisualMedia.ImageOnly
+                    )
+                )
+            }
+        ) {
+            Text(
+                if (selectedImageUri == null) {
+                    "Choose image"
+                } else {
+                    "Change image"
+                }
+            )
+        }
+
+        selectedImageUri?.let { imageUri ->
+            AsyncImage(
+                model = imageUri,
+                contentDescription = "Selected campsite promotional image",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                contentScale = ContentScale.Crop
+            )
+
+            TextButton(
+                enabled = !isSaving,
+                onClick = { selectedImageUri = null }
+            ) {
+                Text("Remove image")
+            }
+        }
 
         OutlinedTextField(
             value = location,
