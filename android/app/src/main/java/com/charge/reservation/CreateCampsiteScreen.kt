@@ -27,9 +27,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.LocalDate
 
 import com.charge.reservation.model.Campsite
-import java.util.Date
+import com.charge.reservation.model.AvailabilityDay
 
 /**
  * Collects initial campsite details and passes them to the caller.
@@ -45,7 +46,7 @@ fun CreateCampsiteScreen(
     campsiteId: String,
     isSaving: Boolean,
     errorMessage: String,
-    onCreateCampsite: (Campsite) -> Unit
+    onCreateCampsite: (Campsite, List<AvailabilityDay>) -> Unit
 ) {
     var name by rememberSaveable(campsiteId) { mutableStateOf("") }
     var description by rememberSaveable(campsiteId) { mutableStateOf("") }
@@ -64,6 +65,9 @@ fun CreateCampsiteScreen(
     }
     var availableNights by rememberSaveable(campsiteId) {
         mutableStateOf<List<String>>(emptyList())
+    }
+    var nightlyCapacity by rememberSaveable(campsiteId) {
+        mutableStateOf(hashMapOf<String, String>())
     }
 
 
@@ -151,18 +155,52 @@ fun CreateCampsiteScreen(
         }
 
         if (availableNights.isNotEmpty()) {
-            Text("Selected dates (tap to remove)")
+            Text("Nightly guest capacity")
 
             availableNights.forEach { night ->
-                InputChip(
-                    selected = true,
+                val maximum = maxOccupancy.trim().toIntOrNull()
+                val input = nightlyCapacity[night] ?: maxOccupancy.trim()
+                val capacity = input.trim().toIntOrNull()
+
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { newValue ->
+                        nightlyCapacity =
+                            HashMap(nightlyCapacity).apply {
+                                put(night, newValue)
+                            }
+                    },
+                    label = { Text("Guest capacity on $night") },
+                    supportingText = {
+                        Text(
+                            if (maximum == null || maximum <= 0) {
+                                "Enter a positive maximum occupancy first."
+                            } else {
+                                "Enter 0 to $maximum guests. 0 means unavailable."
+                            }
+                        )
+                    },
+                    isError = maximum == null ||
+                            maximum <= 0 ||
+                            capacity == null ||
+                            capacity !in 0..maximum,
+                    singleLine = true,
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextButton(
                     enabled = !isSaving,
                     onClick = {
                         availableNights = availableNights - night
-                    },
-                    label = { Text(night) },
-                    trailingIcon = { Text("×") }
-                )
+                        nightlyCapacity =
+                            HashMap(nightlyCapacity).apply {
+                                remove(night)
+                            }
+                    }
+                ) {
+                    Text("Remove $night")
+                }
             }
         }
 
@@ -250,7 +288,17 @@ fun CreateCampsiteScreen(
                     cancellationPolicy = cancellationPolicy.trim()
                 )
 
-                onCreateCampsite(campsite)
+                val availabilityDays = availableNights.map { night ->
+                    val input = nightlyCapacity[night] ?: maxOccupancy.trim()
+
+                    AvailabilityDay(
+                        campsiteId = campsiteId,
+                        date = LocalDate.parse(night),
+                        guestCapacity = input.trim().toIntOrNull(),
+                        bookedGuests = 0
+                    )
+                }
+                onCreateCampsite(campsite, availabilityDays)
             }
         ) {
             Text(if (isSaving) "Saving..." else "Create Campsite")

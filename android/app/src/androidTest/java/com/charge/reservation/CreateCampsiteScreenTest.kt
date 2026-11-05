@@ -32,8 +32,8 @@ class CreateCampsiteScreenTest {
                     campsiteId = "test-campsite",
                     isSaving = false,
                     errorMessage = "",
-                    onCreateCampsite = {
-                        submittedCampsite = it
+                    onCreateCampsite = { campsite, _ ->
+                        submittedCampsite = campsite
                     }
                 )
             }

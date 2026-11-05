@@ -4,6 +4,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.FirebaseFirestore
 
 import com.charge.reservation.model.Campsite
+import com.charge.reservation.model.AvailabilityDay
 
 /**
  * Handles campsite listings stored in Firestore.
@@ -29,12 +30,14 @@ class CampsiteRepository {
      */
     fun createCampsite (
         campsite: Campsite,
+        availabilityDays: List<AvailabilityDay>,
         onSuccess:() -> Unit,
         onFailure: (Exception) -> Unit
     ) {
         val price = campsite.pricePerNight
         val latitude = campsite.latitude
         val longitude = campsite.longitude
+        val maximumGuests = campsite.maxOccupancy?:0
         // Identify missing required information before contacting Firestore.
         val validationError = when {
             campsite.id.isBlank() -> "Campsite ID must not be blank."
@@ -63,6 +66,24 @@ class CampsiteRepository {
 
             campsite.cancellationPolicy.isBlank() -> "Please enter the cancellation policy."
 
+            availabilityDays.isEmpty() ->
+                "Please select at least one available night."
+
+            availabilityDays.any {
+                it.date == null || it.campsiteId != campsite.id
+            } ->
+                "Availability contains an invalid date or campsite ID."
+
+            availabilityDays.map { it.date }.distinct().size != availabilityDays.size ->
+                "Each available night must appear only once."
+
+            availabilityDays.any {
+                (it.guestCapacity ?: -1) !in 0..maximumGuests
+            } ->
+                "Each night's capacity must be a whole number from 0 to $maximumGuests."
+
+            availabilityDays.any { it.bookedGuests != 0 } ->
+                "New availability cannot contain existing bookings."
             else -> null
         }
 
@@ -102,6 +123,23 @@ class CampsiteRepository {
             }
 
             transaction.set(campsiteDocument, campsiteData)
+            for (day in availabilityDays) {
+                val date = requireNotNull(day.date).toString()
+
+                val availabilityDocument = campsiteDocument
+                    .collection("availability")
+                    .document(date)
+
+                transaction.set(
+                    availabilityDocument,
+                    mapOf(
+                        "campsiteId" to campsite.id,
+                        "date" to date,
+                        "guestCapacity" to requireNotNull(day.guestCapacity),
+                        "bookedGuests" to 0
+                    )
+                )
+            }
             Unit
         }
 
