@@ -25,6 +25,7 @@ import com.charge.reservation.model.Campsite
 import com.charge.reservation.owner.OwnerCampsiteListScreen
 import com.charge.reservation.model.UserProfile
 import com.charge.reservation.repository.CampsiteRepository
+import com.charge.reservation.model.AvailabilityDay
 
 
 /**
@@ -169,11 +170,61 @@ fun AppNavigation(profile: UserProfile) {
                         it.id == campsiteId
                     }
 
+                    var availabilityDays by remember(campsite?.id) {
+                        mutableStateOf<List<AvailabilityDay>>(emptyList())
+                    }
+                    var isLoadingAvailability by remember(campsite?.id) {
+                        mutableStateOf(true)
+                    }
+                    var availabilityError by remember(campsite?.id) {
+                        mutableStateOf("")
+                    }
+                    var availabilityRetry by remember(campsite?.id) {
+                        mutableStateOf(0)
+                    }
+
+                    if (campsite != null) {
+                        DisposableEffect(campsite.id, availabilityRetry) {
+                            var active = true
+
+                            isLoadingAvailability = true
+                            availabilityError = ""
+
+                            campsiteRepository.getAvailability(
+                                campsiteId = campsite.id,
+                                onSuccess = { days ->
+                                    if (active) {
+                                        availabilityDays = days
+                                        isLoadingAvailability = false
+                                    }
+                                },
+                                onFailure = { exception ->
+                                    if (active) {
+                                        Log.e(
+                                            "CampsiteAvailability",
+                                            "Can not load availability",
+                                            exception
+                                        )
+
+                                        availabilityDays = emptyList()
+                                        availabilityError =
+                                            "Can not load availability. Please try again."
+                                        isLoadingAvailability = false
+                                    }
+                                }
+                            )
+
+                            onDispose { active = false }
+                        }
+                    }
+
                     OwnerCampsiteDetailsScreen(
                         campsite = campsite,
-                        onBackClick = {
-                            navController.popBackStack()
-                        }
+                        availabilityDays = availabilityDays,
+                        isLoadingAvailability = isLoadingAvailability,
+                        availabilityError = availabilityError,
+                        onRetryAvailability = { availabilityRetry++ },
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }
@@ -195,13 +246,15 @@ fun AppNavigation(profile: UserProfile) {
                     campsiteId = campsiteId,
                     isSaving = isSaving,
                     errorMessage = errorMessage,
-                    onCreateCampsite = { campsite->
+                    onCreateCampsite = { campsite, availabilityDays, imageUri  ->
                         if (!isSaving) {
                             isSaving = true
                             errorMessage = ""
 
                             campsiteRepository.createCampsite(
                                 campsite = campsite,
+                                availabilityDays = availabilityDays,
+                                imageUri = imageUri,
                                 onSuccess = {
                                     isSaving = false
 

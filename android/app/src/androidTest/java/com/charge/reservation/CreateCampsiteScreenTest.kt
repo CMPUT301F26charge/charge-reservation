@@ -32,8 +32,8 @@ class CreateCampsiteScreenTest {
                     campsiteId = "test-campsite",
                     isSaving = false,
                     errorMessage = "",
-                    onCreateCampsite = {
-                        submittedCampsite = it
+                    onCreateCampsite = { campsite, _, _ ->
+                        submittedCampsite = campsite
                     }
                 )
             }
@@ -50,6 +50,49 @@ class CreateCampsiteScreenTest {
         composeRule.onNodeWithText("Location")
             .performScrollTo()
             .performTextInput("  Edmonton, Alberta  ")
+
+        composeRule.onNodeWithText("Latitude")
+            .performScrollTo()
+            .performTextInput("  12.3  ")
+
+        composeRule.onNodeWithText("Longitude")
+            .performScrollTo()
+            .performTextInput("  -123.4  ")
+
+        composeRule.onNodeWithText("Maximum occupancy")
+            .performScrollTo()
+            .performTextInput("  4  ")
+
+        composeRule.onNodeWithText("Price per night")
+            .performScrollTo()
+            .performTextInput("  25.50  ")
+
+        // Add the first tag.
+        composeRule.onNodeWithText("Tag")
+            .performScrollTo()
+            .performTextInput("  test tag 1  ")
+
+        composeRule.onNodeWithText("Add tag")
+            .performScrollTo()
+            .performClick()
+
+        // Add a temporary tag and remove it.
+        composeRule.onNodeWithText("Tag")
+            .performScrollTo()
+            .performTextInput("temp")
+
+        composeRule.onNodeWithText("Add tag")
+            .performScrollTo()
+            .performClick()
+
+        composeRule.onNodeWithText("temp")
+            .performScrollTo()
+            .performClick()
+
+        // Leave the tag 2 in the field and submit without click add tag.
+        composeRule.onNodeWithText("Tag")
+            .performScrollTo()
+            .performTextInput("  test tag 2  ")
 
         composeRule.onNodeWithText("Rules")
             .performScrollTo()
@@ -71,6 +114,26 @@ class CreateCampsiteScreenTest {
             assertEquals("Test Campsite", campsite?.name)
             assertEquals("Test Description.", campsite?.description)
             assertEquals("Edmonton, Alberta", campsite?.location)
+            assertEquals(
+                12.3,
+                campsite?.latitude ?: Double.NaN,
+                0.000001
+            )
+            assertEquals(
+                -123.4,
+                campsite?.longitude ?: Double.NaN,
+                0.000001
+            )
+            assertEquals(4, campsite?.maxOccupancy)
+            assertEquals(
+                25.5,
+                campsite?.pricePerNight ?: -1.0,
+                0.001
+            )
+            assertEquals(
+                listOf("test tag 1", "test tag 2"),
+                campsite?.tags
+            )
             assertEquals("Keep the site clean.", campsite?.rules)
             assertEquals(
                 "Cancel before check-in.",

@@ -26,8 +26,6 @@ import com.charge.reservation.model.Campsite
  *
  * Removed campsites and listings belonging to other owners
  * are excluded.
- *
- * Outstanding: Connect to the authenticated owner's data.
  */
 @Composable
 fun OwnerCampsiteListScreen(
@@ -96,7 +94,7 @@ fun OwnerCampsiteListScreen(
                             Text(campsite.location)
 
                             campsite.maxOccupancy?.let {
-                                Text("Up to $it guests")
+                                Text("Maximum occupancy: $it guests")
                             }
                         }
                     }
