@@ -33,6 +33,8 @@ class CampsiteRepository {
         onFailure: (Exception) -> Unit
     ) {
         val price = campsite.pricePerNight
+        val latitude = campsite.latitude
+        val longitude = campsite.longitude
         // Identify missing required information before contacting Firestore.
         val validationError = when {
             campsite.id.isBlank() -> "Campsite ID must not be blank."
@@ -45,9 +47,17 @@ class CampsiteRepository {
 
             campsite.location.isBlank() -> "Please enter the campsite location."
 
-            (campsite.maxOccupancy ?: 0) <= 0 -> "Please enter a positive whole number for maximum occupancy."
+            latitude == null || !latitude.isFinite() || latitude !in -90.0..90.0 ->
+                "Please enter a latitude between -90 and 90."
 
-            price == null || !price.isFinite() || price < 0.0 -> "Please enter a valid price of 0 or more."
+            longitude == null || !longitude.isFinite() || longitude !in -180.0..180.0 ->
+                "Please enter a longitude between -180 and 180."
+
+            (campsite.maxOccupancy ?: 0) <= 0 ->
+                "Please enter a positive whole number for maximum occupancy."
+
+            price == null || !price.isFinite() || price < 0.0 ->
+                "Please enter a valid price of 0 or more."
 
             campsite.rules.isBlank() -> "Please enter the campsite rules."
 

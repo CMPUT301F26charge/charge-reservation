@@ -40,6 +40,8 @@ fun CreateCampsiteScreen(
     var name by rememberSaveable(campsiteId) { mutableStateOf("") }
     var description by rememberSaveable(campsiteId) { mutableStateOf("") }
     var location by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var latitude by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var longitude by rememberSaveable(campsiteId) { mutableStateOf("") }
     var maxOccupancy by rememberSaveable(campsiteId) { mutableStateOf("") }
     var pricePerNight by rememberSaveable(campsiteId) { mutableStateOf("") }
     var tagInput by rememberSaveable(campsiteId) { mutableStateOf("") }
@@ -83,6 +85,24 @@ fun CreateCampsiteScreen(
             value = location,
             onValueChange = { location = it },
             label = { Text("Location") },
+            singleLine = true,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = latitude,
+            onValueChange = { latitude = it },
+            label = { Text("Latitude") },
+            singleLine = true,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = longitude,
+            onValueChange = { longitude = it },
+            label = { Text("Longitude") },
             singleLine = true,
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
@@ -181,6 +201,8 @@ fun CreateCampsiteScreen(
                     name = name.trim(),
                     description = description.trim(),
                     location = location.trim(),
+                    latitude = latitude.trim().toDoubleOrNull(),
+                    longitude = longitude.trim().toDoubleOrNull(),
                     maxOccupancy = maxOccupancy.trim().toIntOrNull(),
                     pricePerNight = pricePerNight.trim().toDoubleOrNull(),
                     tags = enterTags,

@@ -51,6 +51,14 @@ class CreateCampsiteScreenTest {
             .performScrollTo()
             .performTextInput("  Edmonton, Alberta  ")
 
+        composeRule.onNodeWithText("Latitude")
+            .performScrollTo()
+            .performTextInput("  12.3  ")
+
+        composeRule.onNodeWithText("Longitude")
+            .performScrollTo()
+            .performTextInput("  -123.4  ")
+
         composeRule.onNodeWithText("Maximum occupancy")
             .performScrollTo()
             .performTextInput("  4  ")
@@ -106,6 +114,16 @@ class CreateCampsiteScreenTest {
             assertEquals("Test Campsite", campsite?.name)
             assertEquals("Test Description.", campsite?.description)
             assertEquals("Edmonton, Alberta", campsite?.location)
+            assertEquals(
+                12.3,
+                campsite?.latitude ?: Double.NaN,
+                0.000001
+            )
+            assertEquals(
+                -123.4,
+                campsite?.longitude ?: Double.NaN,
+                0.000001
+            )
             assertEquals(4, campsite?.maxOccupancy)
             assertEquals(
                 25.5,
