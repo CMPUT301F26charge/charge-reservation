@@ -32,7 +32,7 @@ class CreateCampsiteScreenTest {
                     campsiteId = "test-campsite",
                     isSaving = false,
                     errorMessage = "",
-                    onCreateCampsite = { campsite, _ ->
+                    onCreateCampsite = { campsite, _, _ ->
                         submittedCampsite = campsite
                     }
                 )

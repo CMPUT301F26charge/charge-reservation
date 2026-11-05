@@ -4,6 +4,9 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import java.time.LocalDate
+import android.net.Uri
+import com.google.firebase.storage.FirebaseStorage
+import java.util.UUID
 
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
@@ -33,6 +36,7 @@ class CampsiteRepository {
     fun createCampsite (
         campsite: Campsite,
         availabilityDays: List<AvailabilityDay>,
+        imageUri: String? = null,
         onSuccess:() -> Unit,
         onFailure: (Exception) -> Unit
     ) {
@@ -94,8 +98,63 @@ class CampsiteRepository {
             return
         }
 
-        // Point to campsites/campsite.id.
-        val campsiteDocument = firestore.collection("campsites").document(campsite.id)
+        if (imageUri == null) {
+            saveCampsite(
+                campsite = campsite,
+                availabilityDays = availabilityDays,
+                onSuccess = onSuccess,
+                onFailure = onFailure
+            )
+            return
+        }
+
+        try {
+            val imageReference = FirebaseStorage.getInstance().reference
+                .child("campsiteImages")
+                .child(campsite.ownerId)
+                .child(campsite.id)
+                .child(UUID.randomUUID().toString())
+
+            imageReference.putFile(Uri.parse(imageUri))
+                .continueWithTask { task ->
+                    if (!task.isSuccessful) {
+                        throw (
+                                task.exception
+                                    ?: IllegalStateException("Image upload failed.")
+                                )
+                    }
+
+                    imageReference.downloadUrl
+                }
+                .addOnSuccessListener { downloadUri ->
+                    saveCampsite(
+                        campsite = campsite.copy(
+                            promoImageUrls = listOf(downloadUri.toString())
+                        ),
+                        availabilityDays = availabilityDays,
+                        onSuccess = onSuccess,
+                        onFailure = onFailure
+                    )
+                }
+                .addOnFailureListener { exception ->
+                    onFailure(exception)
+                }
+        } catch (exception: Exception) {
+            onFailure(exception)
+        }
+    }
+
+    /**
+     * Saves a validated campsite and its nightly records together.
+     */
+    private fun saveCampsite(
+        campsite: Campsite,
+        availabilityDays: List<AvailabilityDay>,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val campsiteDocument = firestore.collection("campsites")
+            .document(campsite.id)
 
         val campsiteData = mapOf<String, Any?>(
             "id" to campsite.id,
@@ -111,20 +170,21 @@ class CampsiteRepository {
             "longitude" to campsite.longitude,
             "rules" to campsite.rules,
             "cancellationPolicy" to campsite.cancellationPolicy,
-
             "averageRating" to null,
             "removed" to false
         )
 
-        // Check document existence and create the document.
         val creationTask = firestore.runTransaction { transaction ->
             val snapshot = transaction.get(campsiteDocument)
 
             if (snapshot.exists()) {
-                throw IllegalStateException("A campsite or removal record already exists with this ID.")
+                throw IllegalStateException(
+                    "A campsite or removal record already exists with this ID."
+                )
             }
 
             transaction.set(campsiteDocument, campsiteData)
+
             for (day in availabilityDays) {
                 val date = requireNotNull(day.date).toString()
 
@@ -142,6 +202,7 @@ class CampsiteRepository {
                     )
                 )
             }
+
             Unit
         }
 

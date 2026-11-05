@@ -52,7 +52,7 @@ fun CreateCampsiteScreen(
     campsiteId: String,
     isSaving: Boolean,
     errorMessage: String,
-    onCreateCampsite: (Campsite, List<AvailabilityDay>) -> Unit
+    onCreateCampsite: (Campsite, List<AvailabilityDay>, String?) -> Unit
 ) {
     var name by rememberSaveable(campsiteId) { mutableStateOf("") }
     var description by rememberSaveable(campsiteId) { mutableStateOf("") }
@@ -118,7 +118,7 @@ fun CreateCampsiteScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text("Promotional image")
+        Text("Promotional image (up to 10 MiB)")
 
         Button(
             enabled = !isSaving,
@@ -353,7 +353,7 @@ fun CreateCampsiteScreen(
                         bookedGuests = 0
                     )
                 }
-                onCreateCampsite(campsite, availabilityDays)
+                onCreateCampsite(campsite, availabilityDays, selectedImageUri)
             }
         ) {
             Text(if (isSaving) "Saving..." else "Create Campsite")

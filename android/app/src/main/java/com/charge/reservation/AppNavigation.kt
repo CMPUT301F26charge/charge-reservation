@@ -246,7 +246,7 @@ fun AppNavigation(profile: UserProfile) {
                     campsiteId = campsiteId,
                     isSaving = isSaving,
                     errorMessage = errorMessage,
-                    onCreateCampsite = { campsite, availabilityDays ->
+                    onCreateCampsite = { campsite, availabilityDays, imageUri  ->
                         if (!isSaving) {
                             isSaving = true
                             errorMessage = ""
@@ -254,6 +254,7 @@ fun AppNavigation(profile: UserProfile) {
                             campsiteRepository.createCampsite(
                                 campsite = campsite,
                                 availabilityDays = availabilityDays,
+                                imageUri = imageUri,
                                 onSuccess = {
                                     isSaving = false
 
