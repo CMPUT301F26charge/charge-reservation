@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.InputChip
 
 import com.charge.reservation.model.Campsite
 
@@ -41,6 +42,8 @@ fun CreateCampsiteScreen(
     var location by rememberSaveable(campsiteId) { mutableStateOf("") }
     var maxOccupancy by rememberSaveable(campsiteId) { mutableStateOf("") }
     var pricePerNight by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var tagInput by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var tags by rememberSaveable(campsiteId) { mutableStateOf<List<String>>(emptyList()) }
     var rules by rememberSaveable(campsiteId) { mutableStateOf("") }
     var cancellationPolicy by rememberSaveable(campsiteId) { mutableStateOf("") }
 
@@ -104,6 +107,46 @@ fun CreateCampsiteScreen(
         )
 
         OutlinedTextField(
+            value = tagInput,
+            onValueChange = { tagInput = it },
+            label = { Text("Tag") },
+            singleLine = true,
+            enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Button(
+            enabled = !isSaving && tagInput.isNotBlank(),
+            onClick = {
+                val enterTag = tagInput.trim()
+
+                if (enterTag.isNotBlank() && enterTag !in tags) {
+                    tags = tags + enterTag
+                }
+
+                tagInput = ""
+            }
+        ) {
+            Text("Add tag")
+        }
+
+        if (tags.isNotEmpty()) {
+            Text("Added tags (tap to remove)")
+        }
+
+        tags.forEach { tag ->
+            InputChip(
+                selected = true,
+                enabled = !isSaving,
+                onClick = {
+                    tags = tags - tag
+                },
+                label = {Text(tag)},
+                trailingIcon = {Text("x")}
+            )
+        }
+
+        OutlinedTextField(
             value = rules,
             onValueChange = { rules = it },
             label = { Text("Rules") },
@@ -131,6 +174,7 @@ fun CreateCampsiteScreen(
         Button(
             enabled = !isSaving,
             onClick = {
+                val enterTags = (tags + tagInput.trim()).filter { it.isNotEmpty() }.distinct()
                 val campsite = Campsite(
                     id = campsiteId,
                     ownerId = ownerId,
@@ -139,6 +183,7 @@ fun CreateCampsiteScreen(
                     location = location.trim(),
                     maxOccupancy = maxOccupancy.trim().toIntOrNull(),
                     pricePerNight = pricePerNight.trim().toDoubleOrNull(),
+                    tags = enterTags,
                     rules = rules.trim(),
                     cancellationPolicy = cancellationPolicy.trim()
                 )
