@@ -36,10 +36,16 @@ import androidx.compose.material3.rememberTimePickerState
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.Duration
+import androidx.compose.material3.Button
+import com.charge.reservation.model.Lottery
 
 @Composable
 fun CreateLotteryScreen(
-    campsite: Campsite
+    campsite: Campsite,
+    lotteryId: String,
+    isSaving: Boolean,
+    errorMessage: String,
+    onCreateLottery: (Lottery) -> Unit
 ) {
     var winnerCountInput by rememberSaveable(campsite.id) {
         mutableStateOf("")
@@ -71,6 +77,14 @@ fun CreateLotteryScreen(
 
     var bookingEndDateMillis by rememberSaveable(campsite.id) {
         mutableStateOf<Long?>(null)
+    }
+
+    var bookingDeadlineDateMillis by rememberSaveable(campsite.id) {
+        mutableStateOf<Long?>(null)
+    }
+
+    var bookingDeadlineMinutes by rememberSaveable(campsite.id) {
+        mutableStateOf<Int?>(null)
     }
 
     val oneDayMillis = Duration.ofDays(1).toMillis()
@@ -148,6 +162,63 @@ fun CreateLotteryScreen(
         }
 
         Text(
+            text = "Booking deadline",
+            fontSize = 20.sp
+        )
+
+        Text("Winners must confirm their reservation by this deadline.")
+
+        LotteryDateField(
+            label = "Deadline date",
+            selectedDateMillis = bookingDeadlineDateMillis,
+            minDateMillis = registrationEndDateMillis,
+            onDateSelected = { bookingDeadlineDateMillis = it }
+        )
+
+        LotteryTimeField(
+            label = "Deadline time",
+            selectedMinutes = bookingDeadlineMinutes,
+            onTimeSelected = { bookingDeadlineMinutes = it }
+        )
+
+        val registrationClosesAt = lotteryDateTimeInstant(
+            registrationEndDateMillis,
+            registrationEndMinutes,
+            timeZoneId
+        )
+
+        val deadlineAt = lotteryDateTimeInstant(
+            bookingDeadlineDateMillis,
+            bookingDeadlineMinutes,
+            timeZoneId
+        )
+
+        val bookingBeginsAt = lotteryDateTimeInstant(
+            bookingStartDateMillis,
+            0,
+            timeZoneId
+        )
+
+        val deadlineError = when {
+            deadlineAt != null && registrationClosesAt != null &&
+                    !deadlineAt.isAfter(registrationClosesAt) ->
+                "Deadline must be after registration closes."
+
+            deadlineAt != null && bookingBeginsAt != null &&
+                    !deadlineAt.isBefore(bookingBeginsAt) ->
+                "Deadline must be before the booking period begins."
+
+            else -> null
+        }
+
+        if (deadlineError != null) {
+            Text(
+                text = deadlineError,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Text(
             text = "Booking period",
             fontSize = 20.sp
         )
@@ -177,17 +248,126 @@ fun CreateLotteryScreen(
             onDateSelected = { bookingEndDateMillis = it }
         )
 
+        val winnerCount = winnerCountInput.toIntOrNull()
+        val invalidWinnerCount = winnerCountInput.isNotEmpty() &&
+                (winnerCount == null || winnerCount <= 0)
+
         OutlinedTextField(
             value = winnerCountInput,
             onValueChange = { winnerCountInput = it },
             label = { Text("Number of winners") },
+            isError = invalidWinnerCount,
+            supportingText = {
+                if (invalidWinnerCount) {
+                    Text("Enter a whole number greater than zero.")
+                }
+            },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number
             ),
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        val registrationOpensAt = lotteryDateTimeInstant(
+            registrationStartDateMillis,
+            registrationStartMinutes,
+            timeZoneId
+        )
+
+        val bookingStart = bookingStartDateMillis
+        val bookingEnd = bookingEndDateMillis
+
+        val formError = when {
+            registrationOpensAt == null ->
+                "Select the registration opening date and time."
+
+            registrationClosesAt == null ->
+                "Select the registration closing date and time."
+
+            !registrationClosesAt.isAfter(registrationOpensAt) ->
+                "Registration must close after it opens."
+
+            bookingStart == null ->
+                "Select the earliest check-in date."
+
+            bookingEnd == null ->
+                "Select the latest checkout date."
+
+            bookingEnd <= bookingStart ->
+                "Checkout must be after check-in."
+
+            deadlineAt == null ->
+                "Select the booking deadline date and time."
+
+            deadlineError != null ->
+                deadlineError
+
+            winnerCount == null || winnerCount <= 0 ->
+                "Enter a whole number of winners greater than zero."
+
+            else -> null
+        }
+
+        Text(
+            text = formError ?: "All required details are complete."
+        )
+
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Button(
+            enabled = formError == null && !isSaving,
+            onClick = {
+                if (formError == null && !isSaving) {
+                    onCreateLottery(
+                        Lottery(
+                            id = lotteryId,
+                            ownerId = campsite.ownerId,
+                            campsiteIds = listOf(campsite.id),
+                            registrationStartAt = registrationOpensAt,
+                            registrationEndAt = registrationClosesAt,
+                            bookingDeadline = deadlineAt,
+                            bookingStartDate = Instant.ofEpochMilli(
+                                requireNotNull(bookingStart)
+                            ).atZone(ZoneOffset.UTC).toLocalDate(),
+                            bookingEndDate = Instant.ofEpochMilli(
+                                requireNotNull(bookingEnd)
+                            ).atZone(ZoneOffset.UTC).toLocalDate(),
+                            timeZone = ZoneId.of(timeZoneId),
+                            winnerCount = winnerCount
+                        )
+                    )
+                }
+            }
+        ) {
+            Text(
+                if (isSaving) "Publishing..." else "Publish lottery"
+            )
+        }
     }
+}
+
+private fun lotteryDateTimeInstant(
+    dateMillis: Long?,
+    minutes: Int?,
+    timeZoneId: String
+): Instant? {
+    if (dateMillis == null || minutes == null) {
+        return null
+    }
+
+    val date = Instant.ofEpochMilli(dateMillis)
+        .atZone(ZoneOffset.UTC)
+        .toLocalDate()
+
+    return date.atTime(minutes / 60, minutes % 60)
+        .atZone(ZoneId.of(timeZoneId))
+        .toInstant()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -44,6 +44,7 @@ import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
 import com.charge.reservation.lottery.CreateLotteryScreen
+import com.charge.reservation.repository.LotteryRepository
 
 /**
  * Navigates between home and campsite registration.
@@ -67,6 +68,7 @@ fun AppNavigation(profile: UserProfile) {
         "adminMessageLogs"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
+    val lotteryRepository = remember { LotteryRepository() }
 
     val availableRoles = buildList<String> {
         if (!profile.removed) {
@@ -504,7 +506,57 @@ fun AppNavigation(profile: UserProfile) {
                 }
 
                 else -> {
-                    CreateLotteryScreen(campsite = campsite)
+                    val lotteryId = rememberSaveable(profile.id, campsite.id) {
+                        lotteryRepository.generateLotteryId()
+                    }
+
+                    var isSaving by remember(campsite.id) {
+                        mutableStateOf(false)
+                    }
+
+                    var errorMessage by remember(campsite.id) {
+                        mutableStateOf("")
+                    }
+
+                    CreateLotteryScreen(
+                        campsite = campsite,
+                        lotteryId = lotteryId,
+                        isSaving = isSaving,
+                        errorMessage = errorMessage,
+                        onCreateLottery = { lottery ->
+                            if (!isSaving) {
+                                isSaving = true
+                                errorMessage = ""
+
+                                lotteryRepository.createLottery(
+                                    lottery = lottery,
+                                    onSuccess = {
+                                        isSaving = false
+
+                                        if (navController.currentBackStackEntry == entry) {
+                                            navController.popBackStack()
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e(
+                                            "LotteryCreation",
+                                            "Cannot publish lottery",
+                                            exception
+                                        )
+
+                                        isSaving = false
+                                        errorMessage =
+                                            if (exception is IllegalArgumentException) {
+                                                exception.message
+                                                    ?: "Please check the lottery details."
+                                            } else {
+                                                "Cannot publish lottery. Please try again."
+                                            }
+                                    }
+                                )
+                            }
+                        }
+                    )
                 }
             }
         }
