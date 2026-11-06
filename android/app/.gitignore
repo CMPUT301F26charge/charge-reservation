@@ -1,1 +1,8 @@
-/build
+# Allow this module's build directory
+!/build/
+
+# Ignore generated build contents
+/build/*
+
+# Track generated Dokka documentation
+!/build/dokka/
