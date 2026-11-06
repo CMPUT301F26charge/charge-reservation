@@ -75,7 +75,8 @@ fun LotteryNotificationRoute(
             isDeclining = declining,
             declineError = declineError,
             onDecline = { vm.declineInvitation(lotteryId, entrantId, navController) },
-            navController
+            navController,
+            lotteryID = lotteryId
         )
     }
 }
@@ -86,7 +87,8 @@ private fun LoadedLotteryNotification(
     isDeclining: Boolean,
     declineError: Boolean,
     onDecline: () -> Unit,
-    navController: NavController
+    navController: NavController,
+    lotteryID: String
 ) {
     val deadlinePassed = data.bookingDeadline?.let { Instant.now().isAfter(it) } ?: false
 
@@ -99,7 +101,8 @@ private fun LoadedLotteryNotification(
                 onDecline = onDecline,
                 isDeclining = isDeclining,
                 declineError = declineError,
-                navController = navController
+                navController = navController,
+                lotteryId = lotteryID
             )
 
         data.status == ParticipationStatus.NOT_SELECTED ->

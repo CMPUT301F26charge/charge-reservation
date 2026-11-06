@@ -26,14 +26,18 @@ import androidx.compose.ui.res.painterResource
 import com.charge.reservation.R
 import com.charge.reservation.model.Lottery
 import java.time.Instant
+import com.charge.reservation.LotteryButtonState
 
 @Composable
 fun CampsiteDetailsScreen(
     campsite: Campsite,
     onBack: () -> Unit,
-    onJoinLottery: () -> Unit,
     lottery: Lottery? = null,
-    waitlistCount: Int = 0
+    waitlistCount: Int = 0,
+    lotteryButtonState: LotteryButtonState = LotteryButtonState.UNAVAILABLE,
+    isLotteryActionWorking: Boolean = false,
+    lotteryActionError: String = "",
+    onLotteryAction: () -> Unit = {}
 ) {
     val green = Color(0xFF41D49A)
     val grey = Color(0xFFB5B5B5)
@@ -284,25 +288,31 @@ fun CampsiteDetailsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = onJoinLottery,
-            enabled = joinEnabled,
+            onClick = onLotteryAction,
+            enabled = lotteryButtonState.enabled && !isLotteryActionWorking,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = green,
-                contentColor = Color.Black
+                contentColor = Color.Black,
+                disabledContainerColor = Color(0xFF2A2F2C),
+                disabledContentColor = grey
             )
         ) {
-            Text("Join Lottery", fontWeight = FontWeight.Bold)
+            if (isLotteryActionWorking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.Black
+                )
+            } else {
+                Text(lotteryButtonState.label, fontWeight = FontWeight.Bold)
+            }
         }
 
-        if (!joinEnabled) {
-            Text(
-                "Lottery joining is not available yet",
-                color = grey,
-                fontSize = 12.sp
-            )
+        if (lotteryActionError.isNotEmpty()) {
+            Text(lotteryActionError, color = Color(0xFFFF6B6B), fontSize = 12.sp)
         }
     }
 }

@@ -51,6 +51,9 @@ import com.charge.reservation.repository.FoundLottery
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.charge.reservation.booking.InvitationBookingScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -71,6 +74,7 @@ fun AppNavigation(profile: UserProfile) {
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}",
+        "invitation/{lotteryId}",
         "personalInfo",
         "notifications",
         "messages",
@@ -293,6 +297,12 @@ fun AppNavigation(profile: UserProfile) {
                     onDispose { active = false }
                 }
 
+                val lotteryAction = rememberLotteryAction(
+                    lottery = foundLottery?.lottery,
+                    waitlistCount = foundLottery?.waitlistCount ?: 0,
+                    entrantId = profile.id
+                )
+
                 when {
                     isLoadingLottery -> CircularProgressIndicator()
 
@@ -304,9 +314,12 @@ fun AppNavigation(profile: UserProfile) {
                         CampsiteDetailsScreen(
                             campsite = campsite,
                             onBack = { navController.popBackStack() },
-                            onJoinLottery = {},
                             lottery = foundLottery?.lottery,
-                            waitlistCount = foundLottery?.waitlistCount ?: 0
+                            waitlistCount = lotteryAction.waitlistCount,
+                            lotteryButtonState = lotteryAction.buttonState,
+                            isLotteryActionWorking = lotteryAction.isWorking,
+                            lotteryActionError = lotteryAction.error,
+                            onLotteryAction = lotteryAction.onClick
                         )
                     }
                 }
@@ -323,6 +336,22 @@ fun AppNavigation(profile: UserProfile) {
 
         composable("bookings") {
             Text("Bookings, not connected yet")
+        }
+
+        composable(
+            route = "invitation/{lotteryId}",
+            arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
+        ) { entry ->
+            val lotteryId = entry.arguments?.getString("lotteryId")
+            if (lotteryId == null || !profile.isEntrant || profile.removed) {
+                Text("Only entrants can open invitations.")
+            } else {
+                InvitationBookingScreen(
+                    lotteryId = lotteryId,
+                    onBack = { navController.popBackStack() },
+                    onBooked = { navController.popBackStack() }
+                )
+            }
         }
 
         composable("profile") {

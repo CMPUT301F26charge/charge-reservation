@@ -72,7 +72,8 @@ fun LotteryWonNotificationScreen(
     onDecline: () -> Unit = {},
     isDeclining: Boolean = false,
     declineError: Boolean = false,
-    navController: NavController
+    navController: NavController,
+    lotteryId: String
 ) {
     var showDeclineDialog by remember { mutableStateOf(false) }
 
@@ -85,6 +86,7 @@ fun LotteryWonNotificationScreen(
         },
         onPrimaryAction = {
             // TODO: navigate to winning invitation page
+            navController.navigate("invitation/${lotteryId}")
         },
         secondaryButtonText = if (isDeclining) "Declining…" else "Decline invitation",
         onSecondaryAction = { if (!isDeclining) showDeclineDialog = true }
@@ -109,6 +111,7 @@ fun LotteryWonNotificationScreen(
             ),
             onClick = {
                 // TODO: navigate to winning invitation page
+                navController.navigate("invitation/${lotteryId}")
             }
         )
 

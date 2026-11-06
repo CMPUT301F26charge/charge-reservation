@@ -283,7 +283,7 @@ private inline fun <reified E : Enum<E>> String?.toEnumOrNull(): E? =
 private fun DocumentSnapshot.stringList(field: String): List<String> =
     (get(field) as? List<*>)?.filterIsInstance<String>().orEmpty()
 
-private fun DocumentSnapshot.toLottery() = Lottery(
+fun DocumentSnapshot.toLottery() = Lottery(
     id = id,
     ownerId = getString("ownerId").orEmpty(),
     campsiteIds = stringList("campsiteIds"),
@@ -316,7 +316,7 @@ private fun DocumentSnapshot.toCampsite() = Campsite(
     longitude = getDouble("longitude")
 )
 
-private fun DocumentSnapshot.toParticipation() = LotteryParticipation(
+fun DocumentSnapshot.toParticipation() = LotteryParticipation(
     lotteryId = getString("lotteryId").orEmpty(),
     entrantId = getString("entrantId").orEmpty(),
     joinedAt = get("joinedAt").toInstantOrNull(),
