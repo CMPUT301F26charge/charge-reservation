@@ -26,6 +26,10 @@ import androidx.navigation.NavController
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.ui.CampsiteCard
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 fun ExploreCampsitesScreen(
@@ -44,6 +48,20 @@ fun ExploreCampsitesScreen(
 
     var errorMessage by remember {
         mutableStateOf("")
+    }
+
+    var searchText by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    val normalizedSearch = searchText.trim()
+        .replace(Regex("\\s+"), " ")
+
+    val filteredCampsites = campsites.filter { campsite ->
+        val normalizedName = campsite.name.trim()
+            .replace(Regex("\\s+"), " ")
+
+        normalizedName.contains(normalizedSearch, ignoreCase = true)
     }
 
     DisposableEffect(repository) {
@@ -79,6 +97,23 @@ fun ExploreCampsitesScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = { searchText = it },
+            label = { Text("Search campsites") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            trailingIcon = {
+                if (searchText.isNotEmpty()) {
+                    TextButton(onClick = { searchText = "" }) {
+                        Text("Clear")
+                    }
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         when {
             isLoading -> {
                 CircularProgressIndicator()
@@ -95,12 +130,19 @@ fun ExploreCampsitesScreen(
                 )
             }
 
+            filteredCampsites.isEmpty() -> {
+                Text(
+                    "No campsites match your search.",
+                    color = Color.White
+                )
+            }
+
             else -> {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(campsites, key = { it.id }) { campsite ->
+                    items(filteredCampsites, key = { it.id }) { campsite ->
                         CampsiteCard(
                             campsite = campsite,
                             onClick = {
