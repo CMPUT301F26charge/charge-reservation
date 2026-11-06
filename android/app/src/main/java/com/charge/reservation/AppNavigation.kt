@@ -43,20 +43,33 @@ import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
-import com.charge.reservation.reservation.BookingsScreen
+import com.charge.reservation.entrant.ExploreCampsitesScreen
+import com.charge.reservation.ui.CampsiteDetailsScreen
+import com.charge.reservation.repository.LotteryLookupRepository
+import com.charge.reservation.repository.FoundLottery
+import com.charge.reservation.lottery.CreateLotteryScreen
+import com.charge.reservation.repository.LotteryRepository
+import com.charge.reservation.model.Lottery
 
 /**
- * Navigates between home and campsite registration.
+ * Connects role navigation with campsite and lottery repository operations.
+ * Entrant lottery and booking destinations are currently placeholders.
+ *
+ * @param profile signed-in user's profile used for role and ownership checks.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation(profile: UserProfile) {
     val navController = rememberNavController()
+    var selectedCampsite by remember {
+        mutableStateOf<Campsite?>(null)
+    }
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
+        "createLottery/{campsiteId}",
         "personalInfo",
         "notifications",
         "messages",
@@ -240,18 +253,7 @@ fun AppNavigation(profile: UserProfile) {
         }
 
         composable("bookings") {
-            if (profile.isEntrant && !profile.removed) {
-                BookingsScreen(
-                    entrantId = profile.id,
-                    onBackClick = {
-                        navController.navigate("home") {
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            } else {
-                Text("Only entrants can view bookings.")
-            }
+            Text("Bookings, not connected yet")
         }
 
         composable("profile") {
