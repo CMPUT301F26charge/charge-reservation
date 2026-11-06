@@ -52,6 +52,10 @@ import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
 
+import com.charge.reservation.profile.EditProfileScreen
+import com.charge.reservation.repository.UserProfileRepository
+
+
 /**
  * Connects role navigation with campsite and lottery repository operations.
  * Entrant lottery and booking destinations are currently placeholders.
@@ -60,7 +64,9 @@ import com.charge.reservation.model.Lottery
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation(profile: UserProfile) {
+fun AppNavigation(
+    profile: UserProfile,
+    onProfileUpdated: (UserProfile) -> Unit) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
@@ -78,6 +84,9 @@ fun AppNavigation(profile: UserProfile) {
         "adminMessageLogs"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
+    val userProfileRepository = remember {
+        UserProfileRepository()
+    }
     val lotteryLookupRepository = remember { LotteryLookupRepository() }
     val lotteryRepository = remember { LotteryRepository() }
 
@@ -391,8 +400,56 @@ fun AppNavigation(profile: UserProfile) {
                 )
             }
 
-            composable("personalInfo") {
-                Text("Personal information, not connected yet")
+            // Save personal information and update the app's current profile.
+            composable("personalInfo") { entry ->
+                var isSaving by remember { mutableStateOf(false) }
+                var saveError by remember { mutableStateOf("") }
+
+                EditProfileScreen(
+                    profile = profile,
+                    isSaving = isSaving,
+                    saveError = saveError,
+                    onSave = { name, email, phoneNumber, imageUri ->
+                        if (!isSaving) {
+                            isSaving = true
+                            saveError = ""
+
+                            userProfileRepository.updateProfile(
+                                profile = profile,
+                                name = name,
+                                email = email,
+                                phoneNumber = phoneNumber,
+                                imageUri = imageUri,
+                                onSuccess = { updatedProfile ->
+                                    isSaving = false
+                                    onProfileUpdated(updatedProfile)
+
+                                    // Navigate back only if this editor is still open.
+                                    if (navController.currentBackStackEntry == entry) {
+                                        navController.popBackStack()
+                                    }
+                                },
+                                onFailure = { exception ->
+                                    isSaving = false
+
+                                    Log.e(
+                                        "ProfileUpdate",
+                                        "Could not update profile",
+                                        exception
+                                    )
+
+                                    saveError =
+                                        if (exception is IllegalArgumentException) {
+                                            exception.message
+                                                ?: "Please check your information."
+                                        } else {
+                                            "Could not save your profile. Please try again."
+                                        }
+                                }
+                            )
+                        }
+                    }
+                )
             }
 
             composable("notifications") {
