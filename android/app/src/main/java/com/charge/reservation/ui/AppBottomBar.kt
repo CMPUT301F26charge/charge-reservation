@@ -52,7 +52,7 @@ fun AppBottomBar(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}" -> "ownerCampsites"
-        
+
         "personalInfo",
         "messages",
         "policies" -> "profile"
