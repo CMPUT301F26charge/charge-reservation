@@ -294,12 +294,6 @@ fun AppNavigation(
                     onDispose { listener.remove() }
                 }
 
-                val lotteryAction = rememberLotteryAction(
-                    lottery = foundLottery?.lottery,
-                    waitlistCount = foundLottery?.waitlistCount ?: 0,
-                    entrantId = profile.id
-                )
-
                 when {
                     isLoadingCampsite -> CircularProgressIndicator()
                     campsiteError.isNotEmpty() -> Text("Could not load campsite: $campsiteError")
@@ -317,6 +311,12 @@ fun AppNavigation(
                             var lotteryError by remember(campsite.id) {
                                 mutableStateOf("")
                             }
+
+                            val lotteryAction = rememberLotteryAction(
+                                lottery = foundLottery?.lottery,
+                                waitlistCount = foundLottery?.waitlistCount ?: 0,
+                                entrantId = profile.id
+                            )
 
                             DisposableEffect(campsite.id) {
                                 var active = true
@@ -358,9 +358,8 @@ fun AppNavigation(
                                     CampsiteDetailsScreen(
                                         campsite = campsite,
                                         onBack = { navController.popBackStack() },
-                                        onJoinLottery = {},
                                         lottery = foundLottery?.lottery,
-                                        waitlistCount = foundLottery?.waitlistCount ?: 0,
+                                        waitlistCount = lotteryAction.waitlistCount,
                                         lotteryButtonState = lotteryAction.buttonState,
                                         isLotteryActionWorking = lotteryAction.isWorking,
                                         lotteryActionError = lotteryAction.error,
@@ -374,47 +373,27 @@ fun AppNavigation(
                 }
             }
 
-        composable("lotteries") {
-            if (profile.isEntrant && !profile.removed) {
-                Text("Lottery entries, not connected yet")
-            } else {
-                Text("Only entrants can view this page.")
+            composable("lotteries") {
+                if (profile.isEntrant && !profile.removed) {
+                    Text("Lottery entries, not connected yet")
+                } else {
+                    Text("Only entrants can view this page.")
+                }
             }
-        }
 
-        composable("bookings") {
-            Text("Bookings, not connected yet")
-        }
-
-        composable(
-            route = "invitation/{lotteryId}",
-            arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
-        ) { entry ->
-            val lotteryId = entry.arguments?.getString("lotteryId")
-            if (lotteryId == null || !profile.isEntrant || profile.removed) {
-                Text("Only entrants can open invitations.")
-            } else {
-                InvitationBookingScreen(
-                    lotteryId = lotteryId,
-                    onBack = { navController.popBackStack() },
-                    onBooked = { navController.popBackStack() }
-                )
-            }
-        }
-
-        composable("profile") {
-            ProfileMenuScreen(
-                onPersonalInfoClick = {
-                    navController.navigate("personalInfo")
-                },
-                onNotificationsClick = {
-                    navController.navigate("notifications")
-                },
-                onMessagesClick = {
-                    navController.navigate("messages")
-                },
-                onPoliciesClick = {
-                    navController.navigate("policies")
+            composable(
+                route = "invitation/{lotteryId}",
+                arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
+            ) { entry ->
+                val lotteryId = entry.arguments?.getString("lotteryId")
+                if (lotteryId == null || !profile.isEntrant || profile.removed) {
+                    Text("Only entrants can open invitations.")
+                } else {
+                    InvitationBookingScreen(
+                        lotteryId = lotteryId,
+                        onBack = { navController.popBackStack() },
+                        onBooked = { navController.popBackStack() }
+                    )
                 }
             }
 
@@ -504,10 +483,6 @@ fun AppNavigation(
                 )
             }
 
-            composable("notifications") {
-                Text("Notifications, not connected yet")
-            }
-
             composable("messages") {
                 Text("Messages, not connected yet")
             }
@@ -515,12 +490,14 @@ fun AppNavigation(
             composable("policies") {
                 Text("Policy and guidelines, not connected yet")
             }
-        }
-        composable("notifications") {(NotificationsRoute(
-            userId = profile.id,
-            onOpenLottery = { lotteryId: String -> Unit },
-            navController
-        ))}
+
+            composable("notifications") {
+                NotificationsRoute(
+                    userId = profile.id,
+                    onOpenLottery = { lotteryId: String -> Unit },
+                    navController
+                )
+            }
 
             composable("adminCampsites") {
                 if (profile.isAdmin && !profile.removed) {
