@@ -21,6 +21,11 @@ import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Campsite
 import java.util.Locale
 
+/**
+ * Shows a campsite summary, including its name, location, guest limit, and rating.
+ * @param campsite campsite to display
+ * @param onClick called when the card is selected
+ */
 @Composable
 fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
 

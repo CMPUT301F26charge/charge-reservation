@@ -40,6 +40,11 @@ import com.charge.reservation.ui.CampsiteCard
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+/**
+ * Shows the searchable campsite list and combined filters.
+ * @param navController navigation controller for the entrant flow
+ * @param onCampsiteClick called when an entrant selects a campsite
+ */
 @Composable
 fun ExploreCampsitesScreen(
     navController: NavController,
@@ -133,39 +138,15 @@ fun ExploreCampsitesScreen(
         }
     }
 
-    val normalizedSearch = searchText.trim().replace(Regex("\\s+"), " ")
-    val normalizedLocation = activeLocation.trim().replace(Regex("\\s+"), " ")
-    val requestedGuests = activeGuests.toIntOrNull()
-    val checkIn = activeCheckIn.takeIf { it.isNotBlank() }?.let(LocalDate::parse)
-    val checkOut = activeCheckOut.takeIf { it.isNotBlank() }?.let(LocalDate::parse)
-
-    val filteredCampsites = campsites.filter { campsite ->
-        val matchesName = campsite.name.trim().replace(Regex("\\s+"), " ")
-            .contains(normalizedSearch, ignoreCase = true)
-        val matchesLocation = campsite.location.trim().replace(Regex("\\s+"), " ")
-            .contains(normalizedLocation, ignoreCase = true)
-        val matchesGuests = requestedGuests == null ||
-                (campsite.maxOccupancy ?: 0) >= requestedGuests
-
-        val matchesDates = if (checkIn == null || checkOut == null) {
-            true
-        } else {
-            val days = availabilityById[campsite.id].orEmpty()
-            val neededGuests = requestedGuests ?: 1
-            val nights = ChronoUnit.DAYS.between(checkIn, checkOut)
-
-            (0L until nights).all { offset ->
-                val requestedDate = checkIn.plusDays(offset)
-                days.any { day ->
-                    day.date == requestedDate &&
-                            (day.guestCapacity ?: 0) - day.bookedGuests >= neededGuests
-                }
-            }
-        }
-
-        matchesName && matchesLocation && matchesGuests && matchesDates
-    }
-
+    val filteredCampsites = filterCampsites(
+        campsites,
+        searchText,
+        activeLocation,
+        activeGuests.toIntOrNull(),
+        activeCheckIn.takeIf { it.isNotBlank() }?.let(LocalDate::parse),
+        activeCheckOut.takeIf { it.isNotBlank() }?.let(LocalDate::parse),
+        availabilityById
+    )
     Column(
         modifier = Modifier
             .fillMaxSize()

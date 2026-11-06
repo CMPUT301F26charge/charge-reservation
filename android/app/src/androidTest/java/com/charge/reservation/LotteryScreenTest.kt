@@ -40,6 +40,7 @@ class LotteryNotificationScreensTest {
     ) = show { nav ->
         LotteryWonNotificationScreen(
             navController = nav,
+            lotteryId = "test-lottery",
             lotteryName = "Test Lake Lottery",
             lotteryCode = "LOT-999",
             bookingDeadline = "Nov 1, 2026",
