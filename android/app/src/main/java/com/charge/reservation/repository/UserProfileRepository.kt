@@ -276,4 +276,63 @@ class UserProfileRepository {
             onFailure(exception)
         }
     }
+
+    /**
+     * US 01.10.01: Updates a user's notification preference.
+     *
+     * Saves the preference in Firestore without changing
+     * the user's personal information or account roles.
+     *
+     * @param userId Firebase Authentication user ID.
+     * @param enabled Whether future notifications are allowed.
+     * @param onSuccess Called after Firestore confirms the save.
+     * @param onFailure Called if saving fails.
+     */
+    fun updateNotificationPreference(
+        userId: String,
+        enabled: Boolean,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (userId.isBlank()) {
+            onFailure(
+                IllegalArgumentException("User ID cannot be empty.")
+            )
+            return
+        }
+
+        val profileReference = firestore
+            .collection("users")
+            .document(userId)
+
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(profileReference)
+
+            if (!snapshot.exists()) {
+                throw IllegalStateException(
+                    "Your profile could not be found."
+                )
+            }
+
+            if (snapshot.getBoolean("removed") == true) {
+                throw IllegalStateException(
+                    "This profile has been removed."
+                )
+            }
+
+            transaction.update(
+                profileReference,
+                "notificationEnabled",
+                enabled
+            )
+
+            Unit
+        }
+            .addOnSuccessListener {
+                onSuccess()
+            }
+            .addOnFailureListener { exception ->
+                onFailure(exception)
+            }
+    }
 }
