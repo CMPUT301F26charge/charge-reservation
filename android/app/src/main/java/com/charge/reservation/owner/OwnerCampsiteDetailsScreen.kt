@@ -34,7 +34,6 @@ fun OwnerCampsiteDetailsScreen(
     isLoadingAvailability: Boolean,
     availabilityError: String,
     onRetryAvailability: () -> Unit,
-    onBackClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -44,10 +43,6 @@ fun OwnerCampsiteDetailsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Button(onClick = onBackClick) {
-            Text("Back")
-        }
-
         Text(
             text = "Campsite Details",
             fontSize = 28.sp
