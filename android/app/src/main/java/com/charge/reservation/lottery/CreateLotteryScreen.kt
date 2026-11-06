@@ -35,6 +35,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.Duration
 
 @Composable
 fun CreateLotteryScreen(
@@ -63,6 +64,16 @@ fun CreateLotteryScreen(
     val timeZoneId = rememberSaveable(campsite.id) {
         ZoneId.systemDefault().id
     }
+
+    var bookingStartDateMillis by rememberSaveable(campsite.id) {
+        mutableStateOf<Long?>(null)
+    }
+
+    var bookingEndDateMillis by rememberSaveable(campsite.id) {
+        mutableStateOf<Long?>(null)
+    }
+
+    val oneDayMillis = Duration.ofDays(1).toMillis()
 
     Column(
         modifier = Modifier
@@ -103,7 +114,15 @@ fun CreateLotteryScreen(
             label = "Registration closes",
             selectedDateMillis = registrationEndDateMillis,
             minDateMillis = registrationStartDateMillis,
-            onDateSelected = { registrationEndDateMillis = it }
+            onDateSelected = { newEnd ->
+                registrationEndDateMillis = newEnd
+
+                val bookingStart = bookingStartDateMillis
+                if (bookingStart != null && bookingStart <= newEnd) {
+                    bookingStartDateMillis = null
+                    bookingEndDateMillis = null
+                }
+            }
         )
 
         LotteryTimeField(
@@ -127,6 +146,36 @@ fun CreateLotteryScreen(
                 color = MaterialTheme.colorScheme.error
             )
         }
+
+        Text(
+            text = "Booking period",
+            fontSize = 20.sp
+        )
+
+        LotteryDateField(
+            label = "Earliest check-in",
+            selectedDateMillis = bookingStartDateMillis,
+            minDateMillis = registrationEndDateMillis?.let {
+                it + oneDayMillis
+            },
+            onDateSelected = { newStart ->
+                bookingStartDateMillis = newStart
+
+                val endDate = bookingEndDateMillis
+                if (endDate != null && endDate <= newStart) {
+                    bookingEndDateMillis = null
+                }
+            }
+        )
+
+        LotteryDateField(
+            label = "Latest checkout",
+            selectedDateMillis = bookingEndDateMillis,
+            minDateMillis = bookingStartDateMillis?.let {
+                it + oneDayMillis
+            },
+            onDateSelected = { bookingEndDateMillis = it }
+        )
 
         OutlinedTextField(
             value = winnerCountInput,
