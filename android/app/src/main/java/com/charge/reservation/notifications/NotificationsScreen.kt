@@ -75,26 +75,7 @@ fun NotificationsScreen(
             .statusBarsPadding()
     ) {
         // Top bar
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(
-                onClick = {
-                    navController.navigate("home") {popUpTo("home")}
-                },
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text("‹", fontSize = 30.sp, color = Color.White)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "Notifications",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
+
 
         Text(
             roleLabel,
@@ -120,7 +101,6 @@ fun NotificationsScreen(
             }
         }
 
-        BottomBar(selected = BottomTab.ENTRIES)
     }
 }
 
