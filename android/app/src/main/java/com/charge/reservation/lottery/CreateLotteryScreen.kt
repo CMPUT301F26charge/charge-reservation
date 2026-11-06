@@ -65,10 +65,6 @@ fun CreateLotteryScreen(
         mutableStateOf("")
     }
 
-    var waitlistCapacityInput by rememberSaveable(campsite.id) {
-        mutableStateOf("")
-    }
-
     var registrationStartDateMillis by rememberSaveable(campsite.id) {
         mutableStateOf<Long?>(null)
     }
@@ -287,44 +283,10 @@ fun CreateLotteryScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        // US 02.04.07: Optional waitlist capacity.
-        val capacity = if (waitlistCapacityInput.isBlank()) {
-            null
-        } else {
-            waitlistCapacityInput.toIntOrNull()
-        }
-
-        val invalidCapacity =
-            waitlistCapacityInput.isNotBlank() &&
-                    (capacity == null || capacity <= 0)
-
-        OutlinedTextField(
-            value = waitlistCapacityInput,
-            onValueChange = { waitlistCapacityInput = it },
-            label = { Text("Waitlist capacity (optional)") },
-            placeholder = { Text("Leave blank for unlimited") },
-            supportingText = {
-                Text(
-                    if (invalidCapacity) {
-                        "Enter a positive whole number."
-                    } else {
-                        "Blank means unlimited entrants."
-                    }
-                )
-            },
-            isError = invalidCapacity,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number
-            ),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
         val registrationOpensAt = lotteryDateTimeInstant(
             registrationStartDateMillis,
             registrationStartMinutes,
             timeZoneId
-
         )
 
         val bookingStart = bookingStartDateMillis
@@ -357,9 +319,6 @@ fun CreateLotteryScreen(
 
             winnerCount == null || winnerCount <= 0 ->
                 "Enter a whole number of winners greater than zero."
-
-            invalidCapacity ->
-                "Waitlist capacity must be a positive whole number."
 
             else -> null
         }
@@ -394,8 +353,7 @@ fun CreateLotteryScreen(
                                 requireNotNull(bookingEnd)
                             ).atZone(ZoneOffset.UTC).toLocalDate(),
                             timeZone = ZoneId.of(timeZoneId),
-                            winnerCount = winnerCount,
-                            waitlistCapacity = capacity
+                            winnerCount = winnerCount
                         )
                     )
                 }
