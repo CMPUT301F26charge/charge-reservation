@@ -21,6 +21,11 @@ import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Campsite
 import java.util.Locale
 
+/**
+ * Shows a campsite summary, including its name, location, guest limit, and rating.
+ * @param campsite campsite to display
+ * @param onClick called when the card is selected
+ */
 @Composable
 fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
 
@@ -30,9 +35,9 @@ fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
             .clickable { onClick() },
         shape = RoundedCornerShape(11.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF121413)
+            containerColor = Color.White
         ),
-        border = BorderStroke(1.dp, Color(0xFF333B37))
+        border = BorderStroke(1.dp, Color(0xFFDDDDDD))
     ) {
         Column(
             modifier = Modifier
@@ -45,7 +50,7 @@ fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
                 text = campsite.name,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFF5F7F5)
+                color = Color.Black
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -53,7 +58,7 @@ fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
             Text(
                 text = "${campsite.location} • Maximum ${campsite.maxOccupancy ?: "?"} guests",
                 fontSize = 12.sp,
-                color = Color(0xFFACB5AE)
+                color = Color(0xFF666666)
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -63,7 +68,7 @@ fun CampsiteCard(campsite: Campsite, onClick: () -> Unit) {
                     "Rating: ★ ${String.format(Locale.US, "%.1f", it)}"
                 } ?: "No ratings yet",
                 fontSize = 12.sp,
-                color = Color(0xFFACB5AE)
+                color = Color(0xFF666666)
             )
         }
     }

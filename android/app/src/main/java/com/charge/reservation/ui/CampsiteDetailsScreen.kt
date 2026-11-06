@@ -19,24 +19,44 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Campsite
 import java.util.Locale
-import androidx.compose.foundation.Image
+import coil3.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import com.charge.reservation.R
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.AvailabilityDay
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import com.charge.reservation.LotteryButtonState
 
+/**
+ * Shows campsite details, availability, policies, and the lottery entry button.
+ * @param campsite selected campsite
+ * @param onBack returns to campsite browsing
+ * @param lottery associated lottery, if available
+ * @param waitlistCount current number of waitlisted entrants
+ * @param lotteryButtonState current join/leave button state
+ * @param isLotteryActionWorking whether a lottery action is running
+ * @param lotteryActionError error displayed after a failed action
+ * @param onLotteryAction called when the join/leave button is selected
+ */
 @Composable
 fun CampsiteDetailsScreen(
     campsite: Campsite,
     onBack: () -> Unit,
-    onJoinLottery: () -> Unit,
     lottery: Lottery? = null,
-    waitlistCount: Int = 0
+    waitlistCount: Int = 0,
+    lotteryButtonState: LotteryButtonState = LotteryButtonState.UNAVAILABLE,
+    isLotteryActionWorking: Boolean = false,
+    lotteryActionError: String = "",
+    availabilityDays: List<AvailabilityDay> = emptyList(),
+    isLoadingAvailability: Boolean = true,
+    availabilityError: String = "",
+    onLotteryAction: () -> Unit = {}
 ) {
-    val green = Color(0xFF41D49A)
-    val grey = Color(0xFFB5B5B5)
+    val green = Color(0xFF087F5B)
+    val grey = Color(0xFF666666)
     val uriHandler = LocalUriHandler.current
     val now = Instant.now()
 
@@ -50,12 +70,15 @@ fun CampsiteDetailsScreen(
         waitlistCount >= capacity
     } ?: false
 
-    val joinEnabled = registrationOpen && !waitlistFull
+    val availableDays = availabilityDays.filter { day ->
+        day.date != null && !day.date.isBefore(LocalDate.now()) &&
+                (day.guestCapacity ?: 0) > day.bookedGuests
+    }.sortedBy { it.date }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color.White)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -72,7 +95,7 @@ fun CampsiteDetailsScreen(
                 Text(
                     "‹",
                     fontSize = 30.sp,
-                    color = Color.White
+                    color = Color.Black
                 )
             }
 
@@ -82,34 +105,36 @@ fun CampsiteDetailsScreen(
                 "Campsite details",
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.Black
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val imageUrl = campsite.promoImageUrls.firstOrNull()
+
         Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF121413)),
-        contentAlignment = Alignment.Center
-    ) {
-        if (campsite.id == "1") {
-            Image(
-                painter = painterResource(R.drawable.pine_lake),
-                contentDescription = "Campsite photograph",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Text(
-                text = "No promotional image",
-                color = grey
-            )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF5F5F5)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Image of ${campsite.name}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = "No promotional image",
+                    color = grey
+                )
+            }
         }
-    }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -117,7 +142,7 @@ fun CampsiteDetailsScreen(
             campsite.name,
             fontSize = 23.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = Color.Black
         )
 
         Row(
@@ -135,7 +160,7 @@ fun CampsiteDetailsScreen(
                 text = campsite.averageRating?.let {
                     "★ ${String.format(Locale.US, "%.1f", it)}"
                 } ?: "No ratings yet",
-                color = Color(0xFFFFCF45),
+                color = Color(0xFF996A00),
                 fontSize = 14.sp
             )
         }
@@ -145,9 +170,9 @@ fun CampsiteDetailsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF121413)
+                containerColor = Color.White
             ),
-            border = BorderStroke(1.dp, Color(0xFF333B37)),
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD)),
             shape = RoundedCornerShape(11.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
@@ -160,7 +185,7 @@ fun CampsiteDetailsScreen(
 
                 Text(
                     "Up to ${campsite.maxOccupancy ?: "?"} guests",
-                    color = Color.White
+                    color = Color.Black
                 )
 
                 Text(
@@ -181,7 +206,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Availability & price",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -189,21 +214,26 @@ fun CampsiteDetailsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF121413)
+                containerColor = Color.White
             ),
-            border = BorderStroke(1.dp, Color(0xFF333B37))
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD))
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("Available dates", color = Color.White)
+                Text("Available dates", color = Color.Black)
 
-                Text(
-                    "Availability will be loaded from campsite records",
-                    color = grey
-                )
+                when {
+                    isLoadingAvailability -> Text("Loading available dates...", color = grey)
+                    availabilityError.isNotEmpty() -> Text(availabilityError, color = grey)
+                    availableDays.isEmpty() -> Text("No available nights.", color = grey)
+                    else -> availableDays.forEach { day ->
+                        val spots = (day.guestCapacity ?: 0) - day.bookedGuests
+                        Text("${day.date}: $spots guest spaces available", color = grey)
+                    }
+                }
 
                 Text(
                     campsite.pricePerNight?.let {
-                        "$${String.format(Locale.US, "%.2f", it)} per night"
+                        "\$${String.format(Locale.US, "%.2f", it)} per night"
                     } ?: "Price unavailable",
                     color = grey
                 )
@@ -214,7 +244,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Location",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -237,11 +267,12 @@ fun CampsiteDetailsScreen(
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF14201A)
-            )
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD))
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text(campsite.location, color = Color.White)
+                Text(campsite.location, color = Color.Black)
                 Text("View map location →", color = green)
             }
         }
@@ -250,7 +281,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Rules & cancellation",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -271,38 +302,74 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Lottery",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
 
-        Text(
-            "Lottery information will be connected next",
-            color = grey
-        )
+        if (lottery == null) {
+            Text("No lottery available for this campsite.", color = grey)
+        } else {
+            val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
+                .withZone(lottery.timeZone ?: ZoneId.systemDefault())
+
+            Text(
+                "Registration opens: " + (lottery.registrationStartAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Registration closes: " + (lottery.registrationEndAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Waitlist: $waitlistCount" +
+                        (lottery.waitlistCapacity?.let { " / $it" } ?: " (no limit)"),
+                color = grey
+            )
+
+            val status = when {
+                lottery.drawCompletedAt != null -> "Draw completed"
+                registrationOpen && waitlistFull -> "Waitlist full"
+                registrationOpen -> "Registration open"
+                lottery.registrationStartAt != null &&
+                        now.isBefore(lottery.registrationStartAt) -> "Not open yet"
+                else -> "Registration closed"
+            }
+            Text("Status: $status", color = grey)
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = onJoinLottery,
-            enabled = joinEnabled,
+            onClick = onLotteryAction,
+            enabled = lotteryButtonState.enabled && !isLotteryActionWorking,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = green,
-                contentColor = Color.Black
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFF2A2F2C),
+                disabledContentColor = grey
             )
         ) {
-            Text("Join Lottery", fontWeight = FontWeight.Bold)
+            if (isLotteryActionWorking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.Black
+                )
+            } else {
+                Text(lotteryButtonState.label, fontWeight = FontWeight.Bold)
+            }
         }
 
-        if (!joinEnabled) {
-            Text(
-                "Lottery joining is not available yet",
-                color = grey,
-                fontSize = 12.sp
-            )
+        if (lotteryActionError.isNotEmpty()) {
+            Text(lotteryActionError, color = Color(0xFFFF6B6B), fontSize = 12.sp)
         }
     }
 }

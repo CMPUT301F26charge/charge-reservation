@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.charge.reservation.notifications.NotificationsRoute
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,6 +33,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.res.painterResource
+import com.charge.reservation.reservation.BookingsScreen
 
 import com.charge.reservation.owner.OwnerCampsiteDetailsScreen
 import com.charge.reservation.model.Campsite
@@ -50,6 +52,9 @@ import com.charge.reservation.repository.FoundLottery
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.charge.reservation.booking.InvitationBookingScreen
 
 import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
@@ -75,15 +80,13 @@ fun AppNavigation(
     profile: UserProfile,
     onProfileUpdated: (UserProfile) -> Unit) {
     val navController = rememberNavController()
-    var selectedCampsite by remember {
-        mutableStateOf<Campsite?>(null)
-    }
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}",
+        "invitation/{lotteryId}",
         "personalInfo",
         "notifications",
         "messages",
@@ -267,28 +270,27 @@ fun AppNavigation(
             contentAlignment = Alignment.Center
         ) {
 
-        composable("home") {
-            ExploreCampsitesScreen(
-                navController = navController,
-                onCampsiteClick = { campsite ->
-                    selectedCampsite = campsite
-                    navController.navigate("entrantCampsiteDetails")
+            composable("home") {
+                ExploreCampsitesScreen(
+                    navController = navController,
+                    onCampsiteClick = { campsite ->
+                        navController.navigate(
+                            "entrantCampsiteDetails/${Uri.encode(campsite.id)}"
+                        )
+                    }
+                )
+            }
+
+            composable("entrantCampsiteDetails/{campsiteId}") { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId").orEmpty()
+
+                var selectedCampsite by remember(campsiteId) {
+                    mutableStateOf<Campsite?>(null)
                 }
-            )
-        }
-
-        composable("entrantCampsiteDetails") {
-            selectedCampsite?.let { campsite ->
-
-                var foundLottery by remember(campsite.id) {
-                    mutableStateOf<FoundLottery?>(null)
-                }
-
-                var isLoadingLottery by remember(campsite.id) {
+                var isLoadingCampsite by remember(campsiteId) {
                     mutableStateOf(true)
                 }
-
-                var lotteryError by remember(campsite.id) {
+                var campsiteError by remember(campsiteId) {
                     mutableStateOf("")
                 }
                 var isJoiningWaitlist by remember(campsite.id) {
@@ -299,38 +301,26 @@ fun AppNavigation(
                     mutableStateOf("")
                 }
 
-                DisposableEffect(campsite.id) {
-                    var active = true
-
-                    isLoadingLottery = true
-                    lotteryError = ""
-
-                    lotteryLookupRepository.getForCampsite(
-                        campsiteId = campsite.id,
-                        onSuccess = { result ->
-                            if (active) {
-                                foundLottery = result
-                                isLoadingLottery = false
-                            }
+                DisposableEffect(campsiteId) {
+                    val listener = campsiteRepository.listenToActiveCampsites(
+                        onSuccess = { campsites ->
+                            selectedCampsite = campsites.find { it.id == campsiteId }
+                            isLoadingCampsite = false
+                            campsiteError = ""
                         },
                         onFailure = { exception ->
-                            if (active) {
-                                lotteryError = exception.message ?: "Unknown error"
-                                isLoadingLottery = false
-                            }
+                            campsiteError = exception.message ?: "Could not load campsite"
+                            isLoadingCampsite = false
                         }
                     )
 
-                    onDispose { active = false }
+                    onDispose { listener.remove() }
                 }
 
                 when {
-                    isLoadingLottery -> CircularProgressIndicator()
-
-                    lotteryError.isNotEmpty() -> {
-                        Text("Could not load lottery: $lotteryError")
-                    }
-
+                    isLoadingCampsite -> CircularProgressIndicator()
+                    campsiteError.isNotEmpty() -> Text("Could not load campsite: $campsiteError")
+                    selectedCampsite == null -> Text("Campsite not found.")
                     else -> {
                         CampsiteDetailsScreen(
                             campsite = campsite,
@@ -374,18 +364,18 @@ fun AppNavigation(
                 }
             }
         }
+                        selectedCampsite?.let { campsite ->
+                            var foundLottery by remember(campsite.id) {
+                                mutableStateOf<FoundLottery?>(null)
+                            }
 
-        composable("lotteries") {
-            if (profile.isEntrant && !profile.removed) {
-                Text("Lottery entries, not connected yet")
-            } else {
-                Text("Only entrants can view this page.")
-            }
-        }
+                            var isLoadingLottery by remember(campsite.id) {
+                                mutableStateOf(true)
+                            }
 
-        composable("bookings") {
-            Text("Bookings, not connected yet")
-        }
+                            var lotteryError by remember(campsite.id) {
+                                mutableStateOf("")
+                            }
 
         composable("profile") {
             ProfileMenuScreen(
@@ -403,73 +393,80 @@ fun AppNavigation(
                 }
             )
         }
+                            var availabilityDays by remember(campsite.id) {
+                                mutableStateOf<List<AvailabilityDay>>(emptyList())
+                            }
 
+                            var isLoadingAvailability by remember(campsite.id) {
+                                mutableStateOf(true)
+                            }
 
-        composable("personalInfo") { entry ->
+                            var availabilityError by remember(campsite.id) {
+                                mutableStateOf("")
+                            }
 
-            var isSaving by remember {
-                mutableStateOf(false)
-            }
+                            val lotteryAction = rememberLotteryAction(
+                                lottery = foundLottery?.lottery,
+                                waitlistCount = foundLottery?.waitlistCount ?: 0,
+                                entrantId = profile.id
+                            )
 
-            var saveError by remember {
-                mutableStateOf("")
-            }
+                            DisposableEffect(campsite.id) {
+                                var active = true
 
-            EditProfileScreen(
-                profile = profile,
-                isSaving = isSaving,
-                saveError = saveError,
-                onSave = { name, email, phoneNumber, imageUri ->
+                                isLoadingLottery = true
+                                lotteryError = ""
 
-                    if (!isSaving) {
-                        isSaving = true
-                        saveError = ""
+                                lotteryLookupRepository.getForCampsite(
+                                    campsiteId = campsite.id,
+                                    onSuccess = { result ->
+                                        if (active) {
+                                            foundLottery = result
+                                            isLoadingLottery = false
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        if (active) {
+                                            Log.e("LotteryLookup", "Failed to load lottery", exception)
 
-                        userProfileRepository.updateProfile(
-                            profile = profile,
-                            name = name,
-                            email = email,
-                            phoneNumber = phoneNumber,
-                            imageUri = imageUri,
+                                            lotteryError = "Lottery information is unavailable. " +
+                                                    "Please check your internet connection and try again."
 
-                            onSuccess = { updatedProfile ->
-                                isSaving = false
-
-                                // Update the app's in-memory profile.
-                                onProfileUpdated(updatedProfile)
-
-                                // Return to Profile after saving.
-                                if (
-                                    navController.currentBackStackEntry
-                                    == entry
-                                ) {
-                                    navController.popBackStack()
-                                }
-                            },
-
-                            onFailure = { exception ->
-                                isSaving = false
-
-                                Log.e(
-                                    "ProfileUpdate",
-                                    "Could not update profile",
-                                    exception
+                                            isLoadingLottery = false
+                                        }
+                                    }
                                 )
 
-                                saveError =
-                                    if (exception is IllegalArgumentException) {
-                                        exception.message
-                                            ?: "Please check your information."
-                                    } else {
-                                        "Could not save your profile. " +
-                                                "Please try again."
-                                    }
+                                onDispose { active = false }
                             }
-                        )
-                    }
-                }
-            )
-        }
+
+
+                            DisposableEffect(campsite.id) {
+                                var active = true
+
+                                isLoadingAvailability = true
+                                availabilityError = ""
+
+                                campsiteRepository.getAvailability(
+                                    campsiteId = campsite.id,
+                                    onSuccess = { days ->
+                                        if (active) {
+                                            availabilityDays = days
+                                            isLoadingAvailability = false
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        if (active) {
+                                            Log.e("CampsiteAvailability", "Failed to load dates", exception)
+
+                                            availabilityError = "Could not load available dates. Please try again."
+                                            isLoadingAvailability = false
+                                        }
+                                    }
+                                )
+
+                                onDispose { active = false }
+                            }
 
         composable("notificationSettings") {
 
@@ -531,81 +528,276 @@ fun AppNavigation(
         composable("notifications") {
             Text("Notifications, not connected yet")
         }
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                if (isLoadingLottery) {
+                                    Text("Loading lottery...")
+                                } else if (lotteryError.isNotEmpty()) {
+                                    Text(lotteryError)
+                                }
 
-        composable("messages") {
-            Text("Messages, not connected yet")
-        }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    CampsiteDetailsScreen(
+                                        campsite = campsite,
+                                        onBack = { navController.popBackStack() },
+                                        lottery = foundLottery?.lottery,
+                                        waitlistCount = lotteryAction.waitlistCount,
+                                        lotteryButtonState = lotteryAction.buttonState,
+                                        isLotteryActionWorking = lotteryAction.isWorking,
+                                        lotteryActionError = lotteryAction.error,
+                                        onLotteryAction = lotteryAction.onClick,
 
-        composable("policies") {
-            Text("Policy and guidelines, not connected yet")
-        }
+                                        availabilityDays = availabilityDays,
+                                        isLoadingAvailability = isLoadingAvailability,
+                                        availabilityError = availabilityError
 
-        composable("adminCampsites") {
-            if (profile.isAdmin && !profile.removed) {
-                Text("Browse campsites, not connected yet")
-            } else {
-                Text("Only administrators can view this page.")
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        }
 
-        composable("admin") {
-            if (profile.isAdmin && !profile.removed) {
-                AdminMenuScreen(
-                    onProfilesClick = {
-                        navController.navigate("adminProfiles")
+            composable("lotteries") {
+                if (profile.isEntrant && !profile.removed) {
+                    Text("Lottery entries, not connected yet")
+                } else {
+                    Text("Only entrants can view this page.")
+                }
+            }
+
+            composable(
+                route = "invitation/{lotteryId}",
+                arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
+            ) { entry ->
+                val lotteryId = entry.arguments?.getString("lotteryId")
+                if (lotteryId == null || !profile.isEntrant || profile.removed) {
+                    Text("Only entrants can open invitations.")
+                } else {
+                    InvitationBookingScreen(
+                        lotteryId = lotteryId,
+                        onBack = { navController.popBackStack() },
+                        onBooked = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            composable("bookings") {
+                if (profile.isEntrant && !profile.removed) {
+                    BookingsScreen(
+                        entrantId = profile.id,
+                        onBackClick = {
+                            // Return to the existing Home destination.
+                            navController.navigate("home") {
+                                popUpTo("home")
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                } else {
+                    Text("Only entrants can view bookings.")
+                }
+            }
+
+            composable("profile") {
+                ProfileMenuScreen(
+                    onPersonalInfoClick = {
+                        navController.navigate("personalInfo")
                     },
-                    onImagesClick = {
-                        navController.navigate("adminImages")
+                    onNotificationsClick = {
+                        navController.navigate("notifications")
                     },
-                    onNotificationLogsClick = {
-                        navController.navigate("adminNotificationLogs")
+                    onMessagesClick = {
+                        navController.navigate("messages")
                     },
-                    onMessageLogsClick = {
-                        navController.navigate("adminMessageLogs")
+                    onPoliciesClick = {
+                        navController.navigate("policies")
                     }
                 )
-            } else {
-                Text("Only administrators can view this page.")
             }
-        }
 
-        composable("adminProfiles") {
-            if (profile.isAdmin && !profile.removed) {
-                Text("Browse profiles, not connected yet")
-            } else {
-                Text("Only administrators can view this page.")
+            // Save personal information and update the app's current profile.
+            composable("personalInfo") { entry ->
+                var isSaving by remember { mutableStateOf(false) }
+                var saveError by remember { mutableStateOf("") }
+
+                EditProfileScreen(
+                    profile = profile,
+                    isSaving = isSaving,
+                    saveError = saveError,
+                    onSave = { name, email, phoneNumber, imageUri ->
+                        if (!isSaving) {
+                            isSaving = true
+                            saveError = ""
+
+                            userProfileRepository.updateProfile(
+                                profile = profile,
+                                name = name,
+                                email = email,
+                                phoneNumber = phoneNumber,
+                                imageUri = imageUri,
+                                onSuccess = { updatedProfile ->
+                                    isSaving = false
+                                    onProfileUpdated(updatedProfile)
+
+                                    // Navigate back only if this editor is still open.
+                                    if (navController.currentBackStackEntry == entry) {
+                                        navController.popBackStack()
+                                    }
+                                },
+                                onFailure = { exception ->
+                                    isSaving = false
+
+                                    Log.e(
+                                        "ProfileUpdate",
+                                        "Could not update profile",
+                                        exception
+                                    )
+
+                                    saveError =
+                                        if (exception is IllegalArgumentException) {
+                                            exception.message
+                                                ?: "Please check your information."
+                                        } else {
+                                            "Could not save your profile. Please try again."
+                                        }
+                                }
+                            )
+                        }
+                    }
+                )
             }
-        }
 
-        composable("adminImages") {
-            if (profile.isAdmin && !profile.removed) {
-                Text("Browse images, not connected yet")
-            } else {
-                Text("Only administrators can view this page.")
+            composable("messages") {
+                Text("Messages, not connected yet")
             }
-        }
 
-        composable("adminNotificationLogs") {
-            if (profile.isAdmin && !profile.removed) {
-                Text("Notification logs, not connected yet")
-            } else {
-                Text("Only administrators can view this page.")
+            composable("policies") {
+                Text("Policy and guidelines, not connected yet")
             }
-        }
 
-        composable("adminMessageLogs") {
-            if (profile.isAdmin && !profile.removed) {
-                Text("Message logs, not connected yet")
-            } else {
-                Text("Only administrators can view this page.")
+            composable("notifications") {
+                NotificationsRoute(
+                    userId = profile.id,
+                    onOpenLottery = { lotteryId: String -> Unit },
+                    navController
+                )
             }
-        }
 
-        composable ("ownerCampsites"){
-            if (!profile.isOwner || profile.removed) {
-                Text("Only owners can view their campsite listings.")
-            } else {
+            composable("adminCampsites") {
+                if (profile.isAdmin && !profile.removed) {
+                    Text("Browse campsites, not connected yet")
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+            composable("admin") {
+                if (profile.isAdmin && !profile.removed) {
+                    AdminMenuScreen(
+                        onProfilesClick = {
+                            navController.navigate("adminProfiles")
+                        },
+                        onImagesClick = {
+                            navController.navigate("adminImages")
+                        },
+                        onNotificationLogsClick = {
+                            navController.navigate("adminNotificationLogs")
+                        },
+                        onMessageLogsClick = {
+                            navController.navigate("adminMessageLogs")
+                        }
+                    )
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+            composable("adminProfiles") {
+                if (profile.isAdmin && !profile.removed) {
+                    Text("Browse profiles, not connected yet")
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+            composable("adminImages") {
+                if (profile.isAdmin && !profile.removed) {
+                    Text("Browse images, not connected yet")
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+
+            when {
+                !profile.isOwner || profile.removed -> {
+                    Text("Only campsite owners can view their campsite listings.")
+            composable("adminNotificationLogs") {
+                if (profile.isAdmin && !profile.removed) {
+                    Text("Notification logs, not connected yet")
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+            composable("adminMessageLogs") {
+                if (profile.isAdmin && !profile.removed) {
+                    Text("Message logs, not connected yet")
+                } else {
+                    Text("Only administrators can view this page.")
+                }
+            }
+
+            composable ("ownerCampsites"){
+                if (!profile.isOwner || profile.removed) {
+                    Text("Only owners can view their campsite listings.")
+                } else {
+                    when {
+                        isLoadingOwnerCampsites -> {
+                            CircularProgressIndicator()
+                        }
+
+                        ownerCampsitesError.isNotEmpty() -> {
+                            Column {
+                                Text(ownerCampsitesError)
+
+                                Button(
+                                    onClick = { ownerListRetry++ }
+                                ) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+
+                        else -> {
+                            OwnerCampsiteListScreen(
+                                currentOwnerId = profile.id,
+                                campsites = ownerCampsites,
+                                onCampsiteClick = { campsiteId ->
+                                    navController.navigate(
+                                        "ownerCampsiteDetails/${Uri.encode(campsiteId)}"
+                                    )
+                                },
+                                onRegisterCampsiteClick = {
+                                    navController.navigate("createCampsite")
+                                }
+                            )
+                        }
+                    }
+
+
+                }
+            }
+
+            composable("ownerCampsiteDetails/{campsiteId}") { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId")
+
                 when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can view their campsite listings.")
+                    }
+
                     isLoadingOwnerCampsites -> {
                         CircularProgressIndicator()
                     }
@@ -614,90 +806,16 @@ fun AppNavigation(
                         Column {
                             Text(ownerCampsitesError)
 
-                            Button(
-                                onClick = { ownerListRetry++ }
-                            ) {
+                            Button(onClick = { ownerListRetry++ }) {
                                 Text("Retry")
                             }
                         }
                     }
 
                     else -> {
-                        OwnerCampsiteListScreen(
-                            currentOwnerId = profile.id,
-                            campsites = ownerCampsites,
-                            onCampsiteClick = { campsiteId ->
-                                navController.navigate(
-                                    "ownerCampsiteDetails/${Uri.encode(campsiteId)}"
-                                )
-                            },
-                            onRegisterCampsiteClick = {
-                                navController.navigate("createCampsite")
-                            }
-                        )
-                    }
-                }
-
-
-            }
-        }
-
-        composable("ownerCampsiteDetails/{campsiteId}") { entry ->
-            val campsiteId = entry.arguments?.getString("campsiteId")
-
-
-            when {
-                !profile.isOwner || profile.removed -> {
-                    Text("Only campsite owners can view their campsite listings.")
-                }
-
-                isLoadingOwnerCampsites -> {
-                    CircularProgressIndicator()
-                }
-
-                ownerCampsitesError.isNotEmpty() -> {
-                    Column {
-                        Text(ownerCampsitesError)
-
-                        Button(onClick = { ownerListRetry++ }) {
-                            Text("Retry")
+                        val campsite = ownerCampsites.find {
+                            it.id == campsiteId
                         }
-                    }
-                }
-
-                else -> {
-                    val campsite = ownerCampsites.find {
-                        it.id == campsiteId
-                    }
-
-                    var availabilityDays by remember(campsite?.id) {
-                        mutableStateOf<List<AvailabilityDay>>(emptyList())
-                    }
-                    var isLoadingAvailability by remember(campsite?.id) {
-                        mutableStateOf(true)
-                    }
-                    var availabilityError by remember(campsite?.id) {
-                        mutableStateOf("")
-                    }
-                    var availabilityRetry by remember(campsite?.id) {
-                        mutableStateOf(0)
-                    }
-
-                    var lotteries by remember(profile.id, campsite?.id) {
-                        mutableStateOf<List<Lottery>>(emptyList())
-                    }
-
-                    var isLoadingLotteries by remember(profile.id, campsite?.id) {
-                        mutableStateOf(true)
-                    }
-
-                    var lotteriesError by remember(profile.id, campsite?.id) {
-                        mutableStateOf("")
-                    }
-
-                    var lotteriesRetry by remember(profile.id, campsite?.id) {
-                        mutableStateOf(0)
-                    }
 
                     var bookedReservations by remember(campsite?.id) {
                         mutableStateOf<List<Reservation>>(emptyList())
@@ -743,80 +861,107 @@ fun AppNavigation(
                         }
                         DisposableEffect(campsite.id, availabilityRetry) {
                             var active = true
-
-                            isLoadingAvailability = true
-                            availabilityError = ""
-
-                            campsiteRepository.getAvailability(
-                                campsiteId = campsite.id,
-                                onSuccess = { days ->
-                                    if (active) {
-                                        availabilityDays = days
-                                        isLoadingAvailability = false
-                                    }
-                                },
-                                onFailure = { exception ->
-                                    if (active) {
-                                        Log.e(
-                                            "CampsiteAvailability",
-                                            "Can not load availability",
-                                            exception
-                                        )
-
-                                        availabilityDays = emptyList()
-                                        availabilityError =
-                                            "Can not load availability. Please try again."
-                                        isLoadingAvailability = false
-                                    }
-                                }
-                            )
-
-                            onDispose { active = false }
+                        var availabilityDays by remember(campsite?.id) {
+                            mutableStateOf<List<AvailabilityDay>>(emptyList())
+                        }
+                        var isLoadingAvailability by remember(campsite?.id) {
+                            mutableStateOf(true)
+                        }
+                        var availabilityError by remember(campsite?.id) {
+                            mutableStateOf("")
+                        }
+                        var availabilityRetry by remember(campsite?.id) {
+                            mutableStateOf(0)
                         }
 
-                        DisposableEffect(
-                            profile.id,
-                            campsite.id,
-                            lotteriesRetry,
-                            currentScreenEntry
-                        ) {
-                            var active = true
+                        var lotteries by remember(profile.id, campsite?.id) {
+                            mutableStateOf<List<Lottery>>(emptyList())
+                        }
 
-                            // Reload when returning to this campsite's details.
-                            if (currentScreenEntry == entry) {
-                                isLoadingLotteries = true
-                                lotteriesError = ""
+                        var isLoadingLotteries by remember(profile.id, campsite?.id) {
+                            mutableStateOf(true)
+                        }
 
-                                lotteryRepository.getOwnerCampsiteLotteries(
-                                    ownerId = profile.id,
+                        var lotteriesError by remember(profile.id, campsite?.id) {
+                            mutableStateOf("")
+                        }
+
+                        var lotteriesRetry by remember(profile.id, campsite?.id) {
+                            mutableStateOf(0)
+                        }
+
+                        if (campsite != null) {
+                            DisposableEffect(campsite.id, availabilityRetry) {
+                                var active = true
+
+                                isLoadingAvailability = true
+                                availabilityError = ""
+
+                                campsiteRepository.getAvailability(
                                     campsiteId = campsite.id,
-                                    onSuccess = { savedLotteries ->
+                                    onSuccess = { days ->
                                         if (active) {
-                                            lotteries = savedLotteries
-                                            isLoadingLotteries = false
+                                            availabilityDays = days
+                                            isLoadingAvailability = false
                                         }
                                     },
                                     onFailure = { exception ->
                                         if (active) {
                                             Log.e(
-                                                "CampsiteLotteries",
-                                                "Can not load campsite lotteries",
+                                                "CampsiteAvailability",
+                                                "Can not load availability",
                                                 exception
                                             )
 
-                                            lotteries = emptyList()
-                                            lotteriesError =
-                                                "Can not load lotteries. Please try again."
-                                            isLoadingLotteries = false
+                                            availabilityDays = emptyList()
+                                            availabilityError =
+                                                "Can not load availability. Please try again."
+                                            isLoadingAvailability = false
                                         }
                                     }
                                 )
+
+                                onDispose { active = false }
                             }
 
-                            // Ignore results after this request's effect is disposed.
-                            onDispose { active = false }
-                        }
-                    }
+                            DisposableEffect(
+                                profile.id,
+                                campsite.id,
+                                lotteriesRetry,
+                                currentScreenEntry
+                            ) {
+                                var active = true
+
+                                // Reload when returning to this campsite's details.
+                                if (currentScreenEntry == entry) {
+                                    isLoadingLotteries = true
+                                    lotteriesError = ""
+
+                                    lotteryRepository.getOwnerCampsiteLotteries(
+                                        ownerId = profile.id,
+                                        campsiteId = campsite.id,
+                                        onSuccess = { savedLotteries ->
+                                            if (active) {
+                                                lotteries = savedLotteries
+                                                isLoadingLotteries = false
+                                            }
+                                        },
+                                        onFailure = { exception ->
+                                            if (active) {
+                                                Log.e(
+                                                    "CampsiteLotteries",
+                                                    "Can not load campsite lotteries",
+                                                    exception
+                                                )
+
+                                                lotteries = emptyList()
+                                                lotteriesError =
+                                                    "Can not load lotteries. Please try again."
+                                                isLoadingLotteries = false
+                                            }
+                                        }
+                                    )
+                                }
 
                     OwnerCampsiteDetailsScreen(
                         campsite = campsite,
@@ -837,6 +982,8 @@ fun AppNavigation(
                                 navController.navigate(
                                     "createLottery/${Uri.encode(campsite.id)}"
                                 )
+                                // Ignore results after this request's effect is disposed.
+                                onDispose { active = false }
                             }
                         },
                         onUpdateWaitlistCapacity = {
@@ -893,67 +1040,141 @@ fun AppNavigation(
 
 
                     )
+                        OwnerCampsiteDetailsScreen(
+                            campsite = campsite,
+                            availabilityDays = availabilityDays,
+                            isLoadingAvailability = isLoadingAvailability,
+                            availabilityError = availabilityError,
+                            lotteries = lotteries,
+                            isLoadingLotteries = isLoadingLotteries,
+                            lotteriesError = lotteriesError,
+                            onRetryLotteries = { lotteriesRetry++ },
+                            onRetryAvailability = { availabilityRetry++ },
+                            onCreateLotteryClick = {
+                                if (campsite != null) {
+                                    navController.navigate(
+                                        "createLottery/${Uri.encode(campsite.id)}"
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
-        }
 
-        composable("createLottery/{campsiteId}") { entry ->
-            val campsiteId = entry.arguments?.getString("campsiteId")
+            composable("createLottery/{campsiteId}") { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId")
 
-            val campsite = ownerCampsites.find {
-                it.id == campsiteId &&
-                        it.ownerId == profile.id &&
-                        !it.removed
-            }
-
-            when {
-                !profile.isOwner || profile.removed -> {
-                    Text("Only campsite owners can create lotteries.")
+                val campsite = ownerCampsites.find {
+                    it.id == campsiteId &&
+                            it.ownerId == profile.id &&
+                            !it.removed
                 }
 
-                isLoadingOwnerCampsites -> {
-                    CircularProgressIndicator()
-                }
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can create lotteries.")
+                    }
 
-                ownerCampsitesError.isNotEmpty() -> {
-                    Column {
-                        Text(ownerCampsitesError)
+                    isLoadingOwnerCampsites -> {
+                        CircularProgressIndicator()
+                    }
 
-                        Button(onClick = { ownerListRetry++ }) {
-                            Text("Retry")
+                    ownerCampsitesError.isNotEmpty() -> {
+                        Column {
+                            Text(ownerCampsitesError)
+
+                            Button(onClick = { ownerListRetry++ }) {
+                                Text("Retry")
+                            }
                         }
                     }
+
+                    campsite == null -> {
+                        Text("Campsite not found.")
+                    }
+
+                    else -> {
+                        val lotteryId = rememberSaveable(profile.id, campsite.id) {
+                            lotteryRepository.generateLotteryId()
+                        }
+
+                        var isSaving by remember(campsite.id) {
+                            mutableStateOf(false)
+                        }
+
+                        var errorMessage by remember(campsite.id) {
+                            mutableStateOf("")
+                        }
+
+                        CreateLotteryScreen(
+                            campsite = campsite,
+                            lotteryId = lotteryId,
+                            isSaving = isSaving,
+                            errorMessage = errorMessage,
+                            onCreateLottery = { lottery ->
+                                if (!isSaving) {
+                                    isSaving = true
+                                    errorMessage = ""
+
+                                    lotteryRepository.createLottery(
+                                        lottery = lottery,
+                                        onSuccess = {
+                                            isSaving = false
+
+                                            if (navController.currentBackStackEntry == entry) {
+                                                navController.popBackStack()
+                                            }
+                                        },
+                                        onFailure = { exception ->
+                                            Log.e(
+                                                "LotteryCreation",
+                                                "Cannot publish lottery",
+                                                exception
+                                            )
+
+                                            isSaving = false
+                                            errorMessage =
+                                                if (exception is IllegalArgumentException) {
+                                                    exception.message
+                                                        ?: "Please check the lottery details."
+                                                } else {
+                                                    "Cannot publish lottery. Please try again."
+                                                }
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
+            }
 
-                campsite == null -> {
-                    Text("Campsite not found.")
-                }
-
-                else -> {
-                    val lotteryId = rememberSaveable(profile.id, campsite.id) {
-                        lotteryRepository.generateLotteryId()
+            composable("createCampsite") { entry ->
+                if (!profile.isOwner || profile.removed) {
+                    Text("Only campsite owners can register a campsite.")
+                } else {
+                    val campsiteId = rememberSaveable(profile.id) {
+                        campsiteRepository.generateCampsiteId()
                     }
 
-                    var isSaving by remember(campsite.id) {
-                        mutableStateOf(false)
-                    }
+                    var isSaving by remember { mutableStateOf(false) }
+                    var errorMessage by remember { mutableStateOf("") }
 
-                    var errorMessage by remember(campsite.id) {
-                        mutableStateOf("")
-                    }
-
-                    CreateLotteryScreen(
-                        campsite = campsite,
-                        lotteryId = lotteryId,
+                    CreateCampsiteScreen(
+                        ownerId = profile.id,
+                        campsiteId = campsiteId,
                         isSaving = isSaving,
                         errorMessage = errorMessage,
-                        onCreateLottery = { lottery ->
+                        onCreateCampsite = { campsite, availabilityDays, imageUri ->
                             if (!isSaving) {
                                 isSaving = true
                                 errorMessage = ""
 
-                                lotteryRepository.createLottery(
-                                    lottery = lottery,
+                                campsiteRepository.createCampsite(
+                                    campsite = campsite,
+                                    availabilityDays = availabilityDays,
+                                    imageUri = imageUri,
                                     onSuccess = {
                                         isSaving = false
 
@@ -962,19 +1183,15 @@ fun AppNavigation(
                                         }
                                     },
                                     onFailure = { exception ->
-                                        Log.e(
-                                            "LotteryCreation",
-                                            "Cannot publish lottery",
-                                            exception
-                                        )
+                                        Log.e("CampsiteCreation", "Can not create campsite", exception)
 
                                         isSaving = false
                                         errorMessage =
                                             if (exception is IllegalArgumentException) {
                                                 exception.message
-                                                    ?: "Please check the lottery details."
+                                                    ?: "Please check the campsite details."
                                             } else {
-                                                "Cannot publish lottery. Please try again."
+                                                "Can not create campsite. Please try again."
                                             }
                                     }
                                 )
@@ -982,60 +1199,8 @@ fun AppNavigation(
                         }
                     )
                 }
+
             }
         }
-
-        composable("createCampsite") { entry ->
-            if (!profile.isOwner || profile.removed) {
-                Text("Only campsite owners can register a campsite.")
-            } else {
-                val campsiteId = rememberSaveable(profile.id) {
-                    campsiteRepository.generateCampsiteId()
-                }
-
-                var isSaving by remember { mutableStateOf(false) }
-                var errorMessage by remember { mutableStateOf("") }
-
-                CreateCampsiteScreen(
-                    ownerId = profile.id,
-                    campsiteId = campsiteId,
-                    isSaving = isSaving,
-                    errorMessage = errorMessage,
-                    onCreateCampsite = { campsite, availabilityDays, imageUri ->
-                        if (!isSaving) {
-                            isSaving = true
-                            errorMessage = ""
-
-                            campsiteRepository.createCampsite(
-                                campsite = campsite,
-                                availabilityDays = availabilityDays,
-                                imageUri = imageUri,
-                                onSuccess = {
-                                    isSaving = false
-
-                                    if (navController.currentBackStackEntry == entry) {
-                                        navController.popBackStack()
-                                    }
-                                },
-                                onFailure = { exception ->
-                                    Log.e("CampsiteCreation", "Can not create campsite", exception)
-
-                                    isSaving = false
-                                    errorMessage =
-                                        if (exception is IllegalArgumentException) {
-                                            exception.message
-                                                ?: "Please check the campsite details."
-                                        } else {
-                                            "Can not create campsite. Please try again."
-                                        }
-                                }
-                            )
-                        }
-                    }
-                )
-            }
-
-        }
-    }
     }
 }
