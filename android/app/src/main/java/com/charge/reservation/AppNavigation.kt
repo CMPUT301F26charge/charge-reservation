@@ -44,12 +44,18 @@ import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
 
+import com.charge.reservation.profile.EditProfileScreen
+import com.charge.reservation.repository.UserProfileRepository
+
+
 /**
  * Navigates between home and campsite registration.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation(profile: UserProfile) {
+fun AppNavigation(
+    profile: UserProfile,
+    onProfileUpdated: (UserProfile) -> Unit) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
@@ -66,6 +72,9 @@ fun AppNavigation(profile: UserProfile) {
         "adminMessageLogs"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
+    val userProfileRepository = remember {
+        UserProfileRepository()
+    }
 
     val availableRoles = buildList<String> {
         if (!profile.removed) {
@@ -259,11 +268,75 @@ fun AppNavigation(profile: UserProfile) {
             )
         }
 
-        composable("personalInfo") {
-            Text("Personal information, not connected yet")
+
+        composable("personalInfo") { entry ->
+
+            var isSaving by remember {
+                mutableStateOf(false)
+            }
+
+            var saveError by remember {
+                mutableStateOf("")
+            }
+
+            EditProfileScreen(
+                profile = profile,
+                isSaving = isSaving,
+                saveError = saveError,
+                onSave = { name, email, phoneNumber, imageUri ->
+
+                    if (!isSaving) {
+                        isSaving = true
+                        saveError = ""
+
+                        userProfileRepository.updateProfile(
+                            profile = profile,
+                            name = name,
+                            email = email,
+                            phoneNumber = phoneNumber,
+                            imageUri = imageUri,
+
+                            onSuccess = { updatedProfile ->
+                                isSaving = false
+
+                                // Update the app's in-memory profile.
+                                onProfileUpdated(updatedProfile)
+
+                                // Return to Profile after saving.
+                                if (
+                                    navController.currentBackStackEntry
+                                    == entry
+                                ) {
+                                    navController.popBackStack()
+                                }
+                            },
+
+                            onFailure = { exception ->
+                                isSaving = false
+
+                                Log.e(
+                                    "ProfileUpdate",
+                                    "Could not update profile",
+                                    exception
+                                )
+
+                                saveError =
+                                    if (exception is IllegalArgumentException) {
+                                        exception.message
+                                            ?: "Please check your information."
+                                    } else {
+                                        "Could not save your profile. " +
+                                                "Please try again."
+                                    }
+                            }
+                        )
+                    }
+                }
+            )
         }
 
-        composable("notifications") {
+
+            composable("notifications") {
             Text("Notifications, not connected yet")
         }
 
