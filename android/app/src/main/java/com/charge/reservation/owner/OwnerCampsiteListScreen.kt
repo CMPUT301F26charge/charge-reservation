@@ -32,7 +32,6 @@ fun OwnerCampsiteListScreen(
     currentOwnerId: String,
     campsites: List<Campsite>,
     onCampsiteClick: (String) -> Unit,
-    onBackClick: () -> Unit,
     onRegisterCampsiteClick: () -> Unit
 ) {
     // ADDED: Use testable owner filtering logic.
@@ -48,11 +47,6 @@ fun OwnerCampsiteListScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ADDED: Back navigation
-        Button(onClick = onBackClick) {
-            Text("Back")
-        }
-
         Text(
             text = "My Campsites",
             fontSize = 28.sp

@@ -29,6 +29,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.res.painterResource
 
 import com.charge.reservation.owner.OwnerCampsiteDetailsScreen
 import com.charge.reservation.model.Campsite
@@ -48,6 +51,10 @@ fun AppNavigation(profile: UserProfile) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
+    val showBackButton = currentRoute in listOf(
+        "ownerCampsiteDetails/{campsiteId}",
+        "createCampsite"
+    ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
 
     val availableRoles = buildList<String> {
@@ -120,6 +127,18 @@ fun AppNavigation(profile: UserProfile) {
             TopAppBar(
                 title = {
                     Text("Reservation App")
+                },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(
+                            onClick = { navController.popBackStack() }
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_nav_back),
+                                contentDescription = "Back"
+                            )
+                        }
+                    }
                 },
                 actions = {
                     Box {
@@ -237,12 +256,6 @@ fun AppNavigation(profile: UserProfile) {
                             ) {
                                 Text("Retry")
                             }
-
-                            Button (
-                                onClick = { navController.popBackStack() }
-                            ) {
-                                Text("Back")
-                            }
                         }
                     }
 
@@ -254,9 +267,6 @@ fun AppNavigation(profile: UserProfile) {
                                 navController.navigate(
                                     "ownerCampsiteDetails/${Uri.encode(campsiteId)}"
                                 )
-                            },
-                            onBackClick = {
-                                navController.popBackStack()
                             },
                             onRegisterCampsiteClick = {
                                 navController.navigate("createCampsite")
@@ -287,12 +297,6 @@ fun AppNavigation(profile: UserProfile) {
 
                         Button(onClick = { ownerListRetry++ }) {
                             Text("Retry")
-                        }
-
-                        Button(
-                            onClick = { navController.popBackStack() }
-                        ) {
-                            Text("Back")
                         }
                     }
                 }
@@ -356,7 +360,6 @@ fun AppNavigation(profile: UserProfile) {
                         isLoadingAvailability = isLoadingAvailability,
                         availabilityError = availabilityError,
                         onRetryAvailability = { availabilityRetry++ },
-                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }
