@@ -32,6 +32,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.res.painterResource
+import com.charge.reservation.reservation.BookingsScreen
 
 import com.charge.reservation.owner.OwnerCampsiteDetailsScreen
 import com.charge.reservation.model.Campsite
@@ -357,7 +358,20 @@ fun AppNavigation(profile: UserProfile) {
             }
 
             composable("bookings") {
-                Text("Bookings, not connected yet")
+                if (profile.isEntrant && !profile.removed) {
+                    BookingsScreen(
+                        entrantId = profile.id,
+                        onBackClick = {
+                            // Return to the existing Home destination.
+                            navController.navigate("home") {
+                                popUpTo("home")
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                } else {
+                    Text("Only entrants can view bookings.")
+                }
             }
 
             composable("profile") {
