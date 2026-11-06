@@ -261,6 +261,37 @@ class CampsiteRepository {
     }
 
     /**
+     * Listens for all active campsites.
+     */
+    fun listenToActiveCampsites(
+        onSuccess: (List<Campsite>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ): ListenerRegistration {
+
+        return firestore.collection("campsites")
+            .whereEqualTo("removed", false)
+            .addSnapshotListener { snapshot, exception ->
+
+                if (exception != null) {
+                    onFailure(exception)
+                    return@addSnapshotListener
+                }
+
+                try {
+                    val campsites = snapshot?.documents?.mapNotNull { document ->
+                        document.toObject(Campsite::class.java)
+                            ?.copy(id = document.id)
+                    } ?: emptyList()
+
+                    onSuccess(campsites)
+
+                } catch (e: Exception) {
+                    onFailure(e)
+                }
+            }
+    }
+
+    /**
      * Loads the selected campsite's saved nightly availability once.
      */
     fun getAvailability(
