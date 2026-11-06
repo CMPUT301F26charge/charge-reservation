@@ -65,7 +65,7 @@ fun EditProfileScreen(
         mutableStateOf("")
     }
 
-    var selectedImageUri by remember {
+    var selectedImageUri by rememberSaveable(profile.id) {
         mutableStateOf<Uri?>(null)
     }
 
