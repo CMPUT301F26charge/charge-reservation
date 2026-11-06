@@ -129,6 +129,7 @@ class LotteryRepository {
                 "timeZone" to zone.id,
                 "winnerCount" to winnerCount,
                 "waitlistCapacity" to capacity,
+                "waitlistCount" to 0L,
                 "drawCompletedAt" to null
             )
 
