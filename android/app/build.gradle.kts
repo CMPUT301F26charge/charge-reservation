@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    id("org.jetbrains.dokka")
     alias(libs.plugins.kotlin.compose)
     id("com.google.gms.google-services")
 }
