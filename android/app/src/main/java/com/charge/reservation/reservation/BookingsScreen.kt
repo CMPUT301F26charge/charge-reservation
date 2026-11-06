@@ -18,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.util.Log
+
+import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.Reservation
 import com.charge.reservation.repository.ReservationRepository
 
@@ -33,6 +36,12 @@ fun BookingsScreen(
     onBackClick: () -> Unit
 ) {
     val repository = remember { ReservationRepository() }
+
+    val campsiteRepository = remember { CampsiteRepository() }
+
+    var campsiteNames by remember(entrantId) {
+        mutableStateOf<Map<String, String>>(emptyMap())
+    }
 
     var reservations by remember(entrantId) {
         mutableStateOf<List<Reservation>>(emptyList())
@@ -59,6 +68,23 @@ fun BookingsScreen(
         loading = true
         errorMessage = null
 
+        // Resolve campsite names without blocking reservation loading.
+        val campsiteListener = campsiteRepository.listenToActiveCampsites(
+            onSuccess = { campsites ->
+                campsiteNames = campsites.associate { campsite ->
+                    campsite.id to campsite.name
+                }
+            },
+            onFailure = { exception ->
+                campsiteNames = emptyMap()
+                Log.e(
+                    "BookingsScreen",
+                    "Unable to load campsite names.",
+                    exception
+                )
+            }
+        )
+
         val listener = repository.listenToEntrantReservations(
             entrantId = entrantId,
             onSuccess = { records ->
@@ -75,6 +101,7 @@ fun BookingsScreen(
 
         onDispose {
             listener.remove()
+            campsiteListener.remove()
         }
     }
 
@@ -124,8 +151,10 @@ fun BookingsScreen(
 
             ReservationDetailsScreen(
                 reservation = selectedReservation,
-                campsiteName = selectedReservation?.campsiteId
-                    ?: "Unknown campsite",
+                campsiteName = selectedReservation?.let { reservation ->
+                    campsiteNames[reservation.campsiteId]
+                        ?: reservation.campsiteId
+                } ?: "Unknown campsite",
                 onBackClick = {
                     selectedReservationId = null
                 }
@@ -136,7 +165,7 @@ fun BookingsScreen(
             ActiveReservationsScreen(
                 entrantId = entrantId,
                 reservations = reservations,
-                campsiteNames = emptyMap(),
+                campsiteNames = campsiteNames,
                 onReservationClick = { reservationId ->
                     selectedReservationId = reservationId
                 },
