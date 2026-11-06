@@ -75,9 +75,10 @@ class ReservationBookingRepository {
             .document(campsiteId)
 
         // Confirm this participation path with the team.
-        val participationRef = lotteryRef
-            .collection("participations")
-            .document(entrantId)
+        val participationQuery = firestore.collection("lotteryParticipations")
+            .whereEqualTo("lotteryId", lotteryId)
+            .whereEqualTo("entrantId", entrantId)
+            .limit(2)
 
         val reservationRef = firestore.collection("reservations")
             .document()
@@ -95,7 +96,20 @@ class ReservationBookingRepository {
                 .document(night.toString())
         }
 
-        firestore.runTransaction { transaction ->
+        participationQuery.get(com.google.firebase.firestore.Source.SERVER)
+            .addOnSuccessListener { matches ->
+                if (matches.size() != 1) {
+                    onFailure(
+                        IllegalStateException(
+                            "Expected one invitation, found ${matches.size()}."
+                        )
+                    )
+                    return@addOnSuccessListener
+                }
+
+                val participationRef = matches.documents.single().reference
+
+                firestore.runTransaction { transaction ->
 
             // Read every document before performing writes.
             val lotteryDoc = transaction.get(lotteryRef)
@@ -265,6 +279,10 @@ class ReservationBookingRepository {
             .addOnSuccessListener { reservation ->
                 onSuccess(reservation)
             }
+            .addOnFailureListener { exception ->
+                onFailure(exception)
+            }
+        }
             .addOnFailureListener { exception ->
                 onFailure(exception)
             }
