@@ -43,6 +43,7 @@ import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
+import com.charge.reservation.reservation.BookingsScreen
 
 /**
  * Navigates between home and campsite registration.
@@ -239,7 +240,18 @@ fun AppNavigation(profile: UserProfile) {
         }
 
         composable("bookings") {
-            Text("Bookings, not connected yet")
+            if (profile.isEntrant && !profile.removed) {
+                BookingsScreen(
+                    entrantId = profile.id,
+                    onBackClick = {
+                        navController.navigate("home") {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            } else {
+                Text("Only entrants can view bookings.")
+            }
         }
 
         composable("profile") {
