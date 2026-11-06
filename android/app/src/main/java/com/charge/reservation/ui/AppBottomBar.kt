@@ -53,9 +53,21 @@ fun AppBottomBar(
         "createCampsite" -> "ownerCampsites"
 
         "personalInfo",
-        "notifications",
         "messages",
         "policies" -> "profile"
+
+        "notifications" -> {
+            if (activeRole == "Admin") {
+                "admin"
+            } else {
+                "profile"
+            }
+        }
+
+        "adminProfiles",
+        "adminImages",
+        "adminNotificationLogs",
+        "adminMessageLogs" -> "admin"
 
         else -> currentRoute
     }

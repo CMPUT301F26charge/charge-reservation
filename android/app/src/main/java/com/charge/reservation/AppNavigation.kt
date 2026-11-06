@@ -42,6 +42,7 @@ import com.charge.reservation.model.AvailabilityDay
 import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
+import com.charge.reservation.admin.AdminMenuScreen
 
 /**
  * Navigates between home and campsite registration.
@@ -58,7 +59,11 @@ fun AppNavigation(profile: UserProfile) {
         "personalInfo",
         "notifications",
         "messages",
-        "policies"
+        "policies",
+        "adminProfiles",
+        "adminImages",
+        "adminNotificationLogs",
+        "adminMessageLogs"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
 
@@ -146,6 +151,20 @@ fun AppNavigation(profile: UserProfile) {
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            navController.navigate("notifications") {
+                                launchSingleTop = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(
+                                R.drawable.ic_nav_notifications
+                            ),
+                            contentDescription = "Notifications"
+                        )
+                    }
                     Box {
                         TextButton(
                             enabled = availableRoles.size > 1,
@@ -266,15 +285,60 @@ fun AppNavigation(profile: UserProfile) {
 
         composable("admin") {
             if (profile.isAdmin && !profile.removed) {
-                Text("Admin tools — not connected yet")
+                AdminMenuScreen(
+                    onProfilesClick = {
+                        navController.navigate("adminProfiles")
+                    },
+                    onImagesClick = {
+                        navController.navigate("adminImages")
+                    },
+                    onNotificationLogsClick = {
+                        navController.navigate("adminNotificationLogs")
+                    },
+                    onMessageLogsClick = {
+                        navController.navigate("adminMessageLogs")
+                    }
+                )
             } else {
-                Text("Only active administrators can view this page.")
+                Text("Only administrators can view this page.")
+            }
+        }
+
+        composable("adminProfiles") {
+            if (profile.isAdmin && !profile.removed) {
+                Text("Browse profiles, not connected yet")
+            } else {
+                Text("Only administrators can view this page.")
+            }
+        }
+
+        composable("adminImages") {
+            if (profile.isAdmin && !profile.removed) {
+                Text("Browse images, not connected yet")
+            } else {
+                Text("Only administrators can view this page.")
+            }
+        }
+
+        composable("adminNotificationLogs") {
+            if (profile.isAdmin && !profile.removed) {
+                Text("Notification logs, not connected yet")
+            } else {
+                Text("Only administrators can view this page.")
+            }
+        }
+
+        composable("adminMessageLogs") {
+            if (profile.isAdmin && !profile.removed) {
+                Text("Message logs, not connected yet")
+            } else {
+                Text("Only administrators can view this page.")
             }
         }
 
         composable ("ownerCampsites"){
             if (!profile.isOwner || profile.removed) {
-                Text("Only active owners can view their campsite listings.")
+                Text("Only owners can view their campsite listings.")
             } else {
                 when {
                     isLoadingOwnerCampsites -> {
