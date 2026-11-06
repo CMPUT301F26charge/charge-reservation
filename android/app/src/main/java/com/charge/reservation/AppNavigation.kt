@@ -43,6 +43,7 @@ import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
+import com.charge.reservation.lottery.CreateLotteryScreen
 
 /**
  * Navigates between home and campsite registration.
@@ -458,7 +459,52 @@ fun AppNavigation(profile: UserProfile) {
                         isLoadingAvailability = isLoadingAvailability,
                         availabilityError = availabilityError,
                         onRetryAvailability = { availabilityRetry++ },
+                        onCreateLotteryClick = {
+                            if (campsite != null) {
+                                navController.navigate(
+                                    "createLottery/${Uri.encode(campsite.id)}"
+                                )
+                            }
+                        }
                     )
+                }
+            }
+        }
+
+        composable("createLottery/{campsiteId}") { entry ->
+            val campsiteId = entry.arguments?.getString("campsiteId")
+
+            val campsite = ownerCampsites.find {
+                it.id == campsiteId &&
+                        it.ownerId == profile.id &&
+                        !it.removed
+            }
+
+            when {
+                !profile.isOwner || profile.removed -> {
+                    Text("Only campsite owners can create lotteries.")
+                }
+
+                isLoadingOwnerCampsites -> {
+                    CircularProgressIndicator()
+                }
+
+                ownerCampsitesError.isNotEmpty() -> {
+                    Column {
+                        Text(ownerCampsitesError)
+
+                        Button(onClick = { ownerListRetry++ }) {
+                            Text("Retry")
+                        }
+                    }
+                }
+
+                campsite == null -> {
+                    Text("Campsite not found.")
+                }
+
+                else -> {
+                    CreateLotteryScreen(campsite = campsite)
                 }
             }
         }

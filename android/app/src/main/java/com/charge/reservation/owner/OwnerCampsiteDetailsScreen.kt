@@ -34,6 +34,7 @@ fun OwnerCampsiteDetailsScreen(
     isLoadingAvailability: Boolean,
     availabilityError: String,
     onRetryAvailability: () -> Unit,
+    onCreateLotteryClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -72,6 +73,10 @@ fun OwnerCampsiteDetailsScreen(
             text = campsite.name,
             fontSize = 24.sp
         )
+
+        Button(onClick = onCreateLotteryClick) {
+            Text("Create lottery")
+        }
 
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
