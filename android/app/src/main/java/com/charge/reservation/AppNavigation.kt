@@ -60,6 +60,14 @@ import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
 
 
+import com.charge.reservation.profile.NotificationSettingsScreen
+
+import com.charge.reservation.repository.WaitlistRepository
+import com.charge.reservation.repository.LotteryEntrantsRepository
+
+import com.charge.reservation.repository.OwnerBookingsRepository
+import com.charge.reservation.model.Reservation
+
 /**
  * Connects role navigation with campsite and lottery repository operations.
  * Entrant lottery and booking destinations are currently placeholders.
@@ -86,12 +94,10 @@ fun AppNavigation(
         "adminProfiles",
         "adminImages",
         "adminNotificationLogs",
-        "adminMessageLogs"
+        "adminMessageLogs",
+        "notificationSettings"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
-    val userProfileRepository = remember {
-        UserProfileRepository()
-    }
     val lotteryLookupRepository = remember { LotteryLookupRepository() }
     val lotteryRepository = remember { LotteryRepository() }
 
@@ -132,6 +138,16 @@ fun AppNavigation(
     }
     var ownerListRetry by remember(profile.id) {
         mutableStateOf(0)
+    }
+    val userProfileRepository = remember {
+        UserProfileRepository()
+    }
+    val waitlistRepository = remember { WaitlistRepository() }
+    val lotteryEntrantsRepository = remember {
+        LotteryEntrantsRepository()
+    }
+    val ownerBookingsRepository = remember {
+        OwnerBookingsRepository()
     }
 
     if (profile.isOwner && !profile.removed) {
@@ -277,6 +293,13 @@ fun AppNavigation(
                 var campsiteError by remember(campsiteId) {
                     mutableStateOf("")
                 }
+                var isJoiningWaitlist by remember(campsite.id) {
+                    mutableStateOf(false)
+                }
+
+                var joinMessage by remember(campsite.id) {
+                    mutableStateOf("")
+                }
 
                 DisposableEffect(campsiteId) {
                     val listener = campsiteRepository.listenToActiveCampsites(
@@ -299,6 +322,48 @@ fun AppNavigation(
                     campsiteError.isNotEmpty() -> Text("Could not load campsite: $campsiteError")
                     selectedCampsite == null -> Text("Campsite not found.")
                     else -> {
+                        CampsiteDetailsScreen(
+                            campsite = campsite,
+                            onBack = { navController.popBackStack() },
+                            onJoinLottery = {
+                                val selectedLottery = foundLottery?.lottery
+
+                                if (
+                                    profile.isEntrant &&
+                                    !profile.removed &&
+                                    selectedLottery != null &&
+                                    !isJoiningWaitlist
+                                ) {
+                                    isJoiningWaitlist = true
+                                    joinMessage = ""
+
+                                    waitlistRepository.joinWaitlist(
+                                        lotteryId = selectedLottery.id,
+                                        entrantId = profile.id,
+                                        onSuccess = {
+                                            isJoiningWaitlist = false
+                                            joinMessage = "Joined lottery successfully."
+
+                                            foundLottery = foundLottery?.copy(
+                                                waitlistCount =
+                                                    (foundLottery?.waitlistCount ?: 0) + 1
+                                            )
+                                        },
+                                        onFailure = { exception ->
+                                            isJoiningWaitlist = false
+                                            joinMessage = exception.message
+                                                ?: "Unable to join this lottery."
+                                        }
+                                    )
+                                }
+                            },
+                            lottery = foundLottery?.lottery,
+                            waitlistCount = foundLottery?.waitlistCount ?: 0
+                        )
+                    }
+                }
+            }
+        }
                         selectedCampsite?.let { campsite ->
                             var foundLottery by remember(campsite.id) {
                                 mutableStateOf<FoundLottery?>(null)
@@ -312,6 +377,22 @@ fun AppNavigation(
                                 mutableStateOf("")
                             }
 
+        composable("profile") {
+            ProfileMenuScreen(
+                onPersonalInfoClick = {
+                    navController.navigate("personalInfo")
+                },
+                onNotificationsClick = {
+                    navController.navigate("notificationSettings")
+                },
+                onMessagesClick = {
+                    navController.navigate("messages")
+                },
+                onPoliciesClick = {
+                    navController.navigate("policies")
+                }
+            )
+        }
                             var availabilityDays by remember(campsite.id) {
                                 mutableStateOf<List<AvailabilityDay>>(emptyList())
                             }
@@ -387,6 +468,66 @@ fun AppNavigation(
                                 onDispose { active = false }
                             }
 
+        composable("notificationSettings") {
+
+            var isSaving by remember {
+                mutableStateOf(false)
+            }
+
+            var errorMessage by remember {
+                mutableStateOf("")
+            }
+
+            NotificationSettingsScreen(
+                notificationEnabled = profile.notificationEnabled,
+                isSaving = isSaving,
+                errorMessage = errorMessage,
+                onSave = { enabled ->
+
+                    if (!isSaving) {
+                        isSaving = true
+                        errorMessage = ""
+
+                        userProfileRepository.updateNotificationPreference(
+                            userId = profile.id,
+                            enabled = enabled,
+
+                            onSuccess = {
+                                isSaving = false
+
+                                // Update the in-memory profile after
+                                // Firestore successfully saves the change.
+                                onProfileUpdated(
+                                    profile.copy(
+                                        notificationEnabled = enabled
+                                    )
+                                )
+                            },
+
+                            onFailure = { exception ->
+                                isSaving = false
+
+                                Log.e(
+                                    "NotificationSettings",
+                                    "Could not save preference",
+                                    exception
+                                )
+
+                                errorMessage =
+                                    "Could not save notification settings. " +
+                                            "Please try again."
+                            }
+                        )
+                    }
+                }
+            )
+        }
+
+
+
+        composable("notifications") {
+            Text("Notifications, not connected yet")
+        }
                             Column(modifier = Modifier.fillMaxSize()) {
                                 if (isLoadingLottery) {
                                     Text("Loading lottery...")
@@ -588,6 +729,10 @@ fun AppNavigation(
                 }
             }
 
+
+            when {
+                !profile.isOwner || profile.removed -> {
+                    Text("Only campsite owners can view their campsite listings.")
             composable("adminNotificationLogs") {
                 if (profile.isAdmin && !profile.removed) {
                     Text("Notification logs, not connected yet")
@@ -672,6 +817,50 @@ fun AppNavigation(
                             it.id == campsiteId
                         }
 
+                    var bookedReservations by remember(campsite?.id) {
+                        mutableStateOf<List<Reservation>>(emptyList())
+                    }
+
+                    var isLoadingBookings by remember(campsite?.id) {
+                        mutableStateOf(true)
+                    }
+
+                    var bookingsError by remember(campsite?.id) {
+                        mutableStateOf("")
+                    }
+
+
+                    if (campsite != null) {
+                        DisposableEffect(campsite.id, ownerBookingsRepository) {
+                            isLoadingBookings = true
+                            bookingsError = ""
+
+                            val listener = ownerBookingsRepository.listenToBookings(
+                                campsiteId = campsite.id,
+                                onSuccess = { reservations ->
+                                    bookedReservations = reservations
+                                    isLoadingBookings = false
+                                    bookingsError = ""
+                                },
+                                onFailure = { exception ->
+                                    Log.e(
+                                        "OwnerBookings",
+                                        "Could not load reservations",
+                                        exception
+                                    )
+
+                                    bookingsError =
+                                        "Could not load reservations."
+                                    isLoadingBookings = false
+                                }
+                            )
+
+                            onDispose {
+                                listener.remove()
+                            }
+                        }
+                        DisposableEffect(campsite.id, availabilityRetry) {
+                            var active = true
                         var availabilityDays by remember(campsite?.id) {
                             mutableStateOf<List<AvailabilityDay>>(emptyList())
                         }
@@ -774,11 +963,83 @@ fun AppNavigation(
                                     )
                                 }
 
+                    OwnerCampsiteDetailsScreen(
+                        campsite = campsite,
+                        availabilityDays = availabilityDays,
+                        isLoadingAvailability = isLoadingAvailability,
+                        availabilityError = availabilityError,
+                        lotteries = lotteries,
+                        isLoadingLotteries = isLoadingLotteries,
+                        lotteriesError = lotteriesError,
+                        onRetryLotteries = { lotteriesRetry++ },
+                        onRetryAvailability = { availabilityRetry++ },
+                        bookedReservations = bookedReservations,
+                        isLoadingBookings = isLoadingBookings,
+                        bookingsError = bookingsError,
+
+                        onCreateLotteryClick = {
+                            if (campsite != null) {
+                                navController.navigate(
+                                    "createLottery/${Uri.encode(campsite.id)}"
+                                )
                                 // Ignore results after this request's effect is disposed.
                                 onDispose { active = false }
                             }
+                        },
+                        onUpdateWaitlistCapacity = {
+                                lotteryId, newCapacity, onSuccess, onFailure ->
+
+                            waitlistRepository.updateWaitlistCapacity(
+                                lotteryId = lotteryId,
+                                ownerId = profile.id,
+                                newCapacity = newCapacity,
+                                onSuccess = {
+                                    lotteries = lotteries.map { lottery ->
+                                        if (lottery.id == lotteryId) {
+                                            lottery.copy(waitlistCapacity = newCapacity)
+                                        } else {
+                                            lottery
+                                        }
+                                    }
+
+                                    onSuccess()
+                                },
+                                onFailure = { exception ->
+                                    Log.e(
+                                        "WaitlistCapacity",
+                                        "Could not update capacity",
+                                        exception
+                                    )
+
+                                    onFailure(
+                                        exception.message ?: "Could not update capacity."
+                                    )
+                                }
+                            )
+                        },
+
+                        onLoadLotteryEntrants = {
+                                lotteryId, onSuccess, onFailure ->
+
+                            lotteryEntrantsRepository.getEntrants(
+                                lotteryId = lotteryId,
+                                ownerId = profile.id,
+                                onSuccess = onSuccess,
+                                onFailure = { exception ->
+                                    Log.e(
+                                        "LotteryEntrants",
+                                        "Could not load lottery entrants",
+                                        exception
+                                    )
+                                    onFailure(
+                                        exception.message ?: "Could not load entrants."
+                                    )
+                                }
+                            )
                         }
 
+
+                    )
                         OwnerCampsiteDetailsScreen(
                             campsite = campsite,
                             availabilityDays = availabilityDays,

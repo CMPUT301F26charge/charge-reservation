@@ -30,6 +30,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.charge.reservation.LotteryButtonState
 
+/**
+ * Shows campsite details, availability, policies, and the lottery entry button.
+ * @param campsite selected campsite
+ * @param onBack returns to campsite browsing
+ * @param lottery associated lottery, if available
+ * @param waitlistCount current number of waitlisted entrants
+ * @param lotteryButtonState current join/leave button state
+ * @param isLotteryActionWorking whether a lottery action is running
+ * @param lotteryActionError error displayed after a failed action
+ * @param onLotteryAction called when the join/leave button is selected
+ */
 @Composable
 fun CampsiteDetailsScreen(
     campsite: Campsite,
