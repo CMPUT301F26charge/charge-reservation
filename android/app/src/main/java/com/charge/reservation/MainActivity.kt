@@ -117,8 +117,15 @@ class MainActivity : ComponentActivity() {
                             }
 
                             is AppLaunchState.ProfileReady -> {
-                                AppNavigation(profile = state.profile)
+                                AppNavigation(
+                                    profile = state.profile,
+                                    onProfileUpdated = { updatedProfile ->
+                                        appLaunchState =
+                                            AppLaunchState.ProfileReady(updatedProfile)
+                                    }
+                                )
                             }
+
 
                             AppLaunchState.ProfileRemoved -> Text("This profile has been removed.")
 

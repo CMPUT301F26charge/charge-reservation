@@ -19,11 +19,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Campsite
 import java.util.Locale
-import androidx.compose.foundation.Image
+import coil3.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import com.charge.reservation.R
 import com.charge.reservation.model.Lottery
 import java.time.Instant
 import com.charge.reservation.LotteryButtonState
@@ -39,8 +37,8 @@ fun CampsiteDetailsScreen(
     lotteryActionError: String = "",
     onLotteryAction: () -> Unit = {}
 ) {
-    val green = Color(0xFF41D49A)
-    val grey = Color(0xFFB5B5B5)
+    val green = Color(0xFF087F5B)
+    val grey = Color(0xFF666666)
     val uriHandler = LocalUriHandler.current
     val now = Instant.now()
 
@@ -59,7 +57,7 @@ fun CampsiteDetailsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color.White)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -76,7 +74,7 @@ fun CampsiteDetailsScreen(
                 Text(
                     "‹",
                     fontSize = 30.sp,
-                    color = Color.White
+                    color = Color.Black
                 )
             }
 
@@ -86,34 +84,36 @@ fun CampsiteDetailsScreen(
                 "Campsite details",
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.Black
             )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val imageUrl = campsite.promoImageUrls.firstOrNull()
+
         Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(220.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF121413)),
-        contentAlignment = Alignment.Center
-    ) {
-        if (campsite.id == "1") {
-            Image(
-                painter = painterResource(R.drawable.pine_lake),
-                contentDescription = "Campsite photograph",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Text(
-                text = "No promotional image",
-                color = grey
-            )
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF5F5F5)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = "Image of ${campsite.name}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = "No promotional image",
+                    color = grey
+                )
+            }
         }
-    }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -121,7 +121,7 @@ fun CampsiteDetailsScreen(
             campsite.name,
             fontSize = 23.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = Color.Black
         )
 
         Row(
@@ -139,7 +139,7 @@ fun CampsiteDetailsScreen(
                 text = campsite.averageRating?.let {
                     "★ ${String.format(Locale.US, "%.1f", it)}"
                 } ?: "No ratings yet",
-                color = Color(0xFFFFCF45),
+                color = Color(0xFF996A00),
                 fontSize = 14.sp
             )
         }
@@ -149,9 +149,9 @@ fun CampsiteDetailsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF121413)
+                containerColor = Color.White
             ),
-            border = BorderStroke(1.dp, Color(0xFF333B37)),
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD)),
             shape = RoundedCornerShape(11.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
@@ -164,7 +164,7 @@ fun CampsiteDetailsScreen(
 
                 Text(
                     "Up to ${campsite.maxOccupancy ?: "?"} guests",
-                    color = Color.White
+                    color = Color.Black
                 )
 
                 Text(
@@ -185,7 +185,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Availability & price",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -193,12 +193,12 @@ fun CampsiteDetailsScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF121413)
+                containerColor = Color.White
             ),
-            border = BorderStroke(1.dp, Color(0xFF333B37))
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD))
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text("Available dates", color = Color.White)
+                Text("Available dates", color = Color.Black)
 
                 Text(
                     "Availability will be loaded from campsite records",
@@ -218,7 +218,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Location",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -241,11 +241,12 @@ fun CampsiteDetailsScreen(
                     )
                 },
             colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF14201A)
-            )
+                containerColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color(0xFFDDDDDD))
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Text(campsite.location, color = Color.White)
+                Text(campsite.location, color = Color.Black)
                 Text("View map location →", color = green)
             }
         }
@@ -254,7 +255,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Rules & cancellation",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -275,7 +276,7 @@ fun CampsiteDetailsScreen(
 
         Text(
             "Lottery",
-            color = Color.White,
+            color = Color.Black,
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
@@ -295,7 +296,7 @@ fun CampsiteDetailsScreen(
                 .height(54.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = green,
-                contentColor = Color.Black,
+                contentColor = Color.White,
                 disabledContainerColor = Color(0xFF2A2F2C),
                 disabledContentColor = grey
             )
