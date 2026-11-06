@@ -41,6 +41,7 @@ import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.AvailabilityDay
 import com.charge.reservation.owner.CreateCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
+import com.charge.reservation.profile.ProfileMenuScreen
 
 /**
  * Navigates between home and campsite registration.
@@ -53,7 +54,11 @@ fun AppNavigation(profile: UserProfile) {
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
-        "createCampsite"
+        "createCampsite",
+        "personalInfo",
+        "notifications",
+        "messages",
+        "policies"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
 
@@ -219,7 +224,36 @@ fun AppNavigation(profile: UserProfile) {
         }
 
         composable("profile") {
-            Text("Profile and settings, not connected yet")
+            ProfileMenuScreen(
+                onPersonalInfoClick = {
+                    navController.navigate("personalInfo")
+                },
+                onNotificationsClick = {
+                    navController.navigate("notifications")
+                },
+                onMessagesClick = {
+                    navController.navigate("messages")
+                },
+                onPoliciesClick = {
+                    navController.navigate("policies")
+                }
+            )
+        }
+
+        composable("personalInfo") {
+            Text("Personal information, not connected yet")
+        }
+
+        composable("notifications") {
+            Text("Notifications, not connected yet")
+        }
+
+        composable("messages") {
+            Text("Messages, not connected yet")
+        }
+
+        composable("policies") {
+            Text("Policy and guidelines, not connected yet")
         }
 
         composable("adminCampsites") {

@@ -52,9 +52,13 @@ fun AppBottomBar(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite" -> "ownerCampsites"
 
+        "personalInfo",
+        "notifications",
+        "messages",
+        "policies" -> "profile"
+
         else -> currentRoute
     }
-
     NavigationBar {
         tabs.forEach { tab ->
             NavigationBarItem(
