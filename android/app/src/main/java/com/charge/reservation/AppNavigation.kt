@@ -50,6 +50,7 @@ import com.charge.reservation.repository.FoundLottery
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.reservation.BookingsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -321,7 +322,19 @@ fun AppNavigation(profile: UserProfile) {
         }
 
         composable("bookings") {
-            Text("Bookings, not connected yet")
+            if (profile.isEntrant && !profile.removed) {
+                BookingsScreen(
+                    entrantId = profile.id,
+                    onBackClick = {
+                        navController.navigate("home") {
+                            popUpTo("home")
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            } else {
+                Text("Only entrants can view bookings.")
+            }
         }
 
         composable("profile") {
