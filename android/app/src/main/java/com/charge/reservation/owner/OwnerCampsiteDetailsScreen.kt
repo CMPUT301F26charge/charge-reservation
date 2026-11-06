@@ -24,6 +24,13 @@ import com.charge.reservation.model.Lottery
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
@@ -31,6 +38,8 @@ import com.charge.reservation.model.AvailabilityDay
 
 /**
  * Displays saved campsite details, availability and lottery configuration.
+ * Registration status uses the device clock and refreshes
+ * once per second while the screen is composed.
  *
  * @param lotteries saved lotteries associated with this campsite.
  * @param isLoadingLotteries whether a lottery request is pending.
@@ -50,6 +59,16 @@ fun OwnerCampsiteDetailsScreen(
     onRetryAvailability: () -> Unit,
     onCreateLotteryClick: () -> Unit
 ) {
+    var now by remember(campsite?.id) {
+        mutableStateOf(Instant.now())
+    }
+
+    LaunchedEffect(campsite?.id) {
+        while (isActive) {
+            now = Instant.now()
+            delay(1_000L)
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -218,7 +237,6 @@ fun OwnerCampsiteDetailsScreen(
             }
 
             else -> {
-                val now = Instant.now()
 
                 lotteries.forEach { lottery ->
                     val opens = lottery.registrationStartAt
