@@ -50,6 +50,7 @@ import com.charge.reservation.repository.FoundLottery
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.reservation.BookingsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -80,6 +81,8 @@ fun AppNavigation(profile: UserProfile) {
         "adminMessageLogs"
     ) && navController.previousBackStackEntry != null
     val campsiteRepository = remember { CampsiteRepository() }
+    val lotteryLookupRepository = remember { LotteryLookupRepository() }
+    val lotteryRepository = remember { LotteryRepository() }
 
     val availableRoles = buildList<String> {
         if (!profile.removed) {
@@ -241,7 +244,73 @@ fun AppNavigation(profile: UserProfile) {
         ) {
 
         composable("home") {
-            Text("Explore campsites, not connected yet")
+            ExploreCampsitesScreen(
+                navController = navController,
+                onCampsiteClick = { campsite ->
+                    selectedCampsite = campsite
+                    navController.navigate("entrantCampsiteDetails")
+                }
+            )
+        }
+
+        composable("entrantCampsiteDetails") {
+            selectedCampsite?.let { campsite ->
+
+                var foundLottery by remember(campsite.id) {
+                    mutableStateOf<FoundLottery?>(null)
+                }
+
+                var isLoadingLottery by remember(campsite.id) {
+                    mutableStateOf(true)
+                }
+
+                var lotteryError by remember(campsite.id) {
+                    mutableStateOf("")
+                }
+
+                DisposableEffect(campsite.id) {
+                    var active = true
+
+                    isLoadingLottery = true
+                    lotteryError = ""
+
+                    lotteryLookupRepository.getForCampsite(
+                        campsiteId = campsite.id,
+                        onSuccess = { result ->
+                            if (active) {
+                                foundLottery = result
+                                isLoadingLottery = false
+                            }
+                        },
+                        onFailure = { exception ->
+                            if (active) {
+                                lotteryError = exception.message ?: "Unknown error"
+                                isLoadingLottery = false
+                            }
+                        }
+                    )
+
+                    onDispose { active = false }
+                }
+
+                when {
+                    isLoadingLottery -> CircularProgressIndicator()
+
+                    lotteryError.isNotEmpty() -> {
+                        Text("Could not load lottery: $lotteryError")
+                    }
+
+                    else -> {
+                        CampsiteDetailsScreen(
+                            campsite = campsite,
+                            onBack = { navController.popBackStack() },
+                            onJoinLottery = {},
+                            lottery = foundLottery?.lottery,
+                            waitlistCount = foundLottery?.waitlistCount ?: 0
+                        )
+                    }
+                }
+            }
         }
 
         composable("lotteries") {
@@ -253,7 +322,19 @@ fun AppNavigation(profile: UserProfile) {
         }
 
         composable("bookings") {
-            Text("Bookings, not connected yet")
+            if (profile.isEntrant && !profile.removed) {
+                BookingsScreen(
+                    entrantId = profile.id,
+                    onBackClick = {
+                        navController.navigate("home") {
+                            popUpTo("home")
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            } else {
+                Text("Only entrants can view bookings.")
+            }
         }
 
         composable("profile") {
@@ -431,6 +512,22 @@ fun AppNavigation(profile: UserProfile) {
                         mutableStateOf(0)
                     }
 
+                    var lotteries by remember(profile.id, campsite?.id) {
+                        mutableStateOf<List<Lottery>>(emptyList())
+                    }
+
+                    var isLoadingLotteries by remember(profile.id, campsite?.id) {
+                        mutableStateOf(true)
+                    }
+
+                    var lotteriesError by remember(profile.id, campsite?.id) {
+                        mutableStateOf("")
+                    }
+
+                    var lotteriesRetry by remember(profile.id, campsite?.id) {
+                        mutableStateOf(0)
+                    }
+
                     if (campsite != null) {
                         DisposableEffect(campsite.id, availabilityRetry) {
                             var active = true
@@ -464,6 +561,49 @@ fun AppNavigation(profile: UserProfile) {
 
                             onDispose { active = false }
                         }
+
+                        DisposableEffect(
+                            profile.id,
+                            campsite.id,
+                            lotteriesRetry,
+                            currentScreenEntry
+                        ) {
+                            var active = true
+
+                            // Reload when returning to this campsite's details.
+                            if (currentScreenEntry == entry) {
+                                isLoadingLotteries = true
+                                lotteriesError = ""
+
+                                lotteryRepository.getOwnerCampsiteLotteries(
+                                    ownerId = profile.id,
+                                    campsiteId = campsite.id,
+                                    onSuccess = { savedLotteries ->
+                                        if (active) {
+                                            lotteries = savedLotteries
+                                            isLoadingLotteries = false
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        if (active) {
+                                            Log.e(
+                                                "CampsiteLotteries",
+                                                "Can not load campsite lotteries",
+                                                exception
+                                            )
+
+                                            lotteries = emptyList()
+                                            lotteriesError =
+                                                "Can not load lotteries. Please try again."
+                                            isLoadingLotteries = false
+                                        }
+                                    }
+                                )
+                            }
+
+                            // Ignore results after this request's effect is disposed.
+                            onDispose { active = false }
+                        }
                     }
 
                     OwnerCampsiteDetailsScreen(
@@ -471,7 +611,106 @@ fun AppNavigation(profile: UserProfile) {
                         availabilityDays = availabilityDays,
                         isLoadingAvailability = isLoadingAvailability,
                         availabilityError = availabilityError,
+                        lotteries = lotteries,
+                        isLoadingLotteries = isLoadingLotteries,
+                        lotteriesError = lotteriesError,
+                        onRetryLotteries = { lotteriesRetry++ },
                         onRetryAvailability = { availabilityRetry++ },
+                        onCreateLotteryClick = {
+                            if (campsite != null) {
+                                navController.navigate(
+                                    "createLottery/${Uri.encode(campsite.id)}"
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        composable("createLottery/{campsiteId}") { entry ->
+            val campsiteId = entry.arguments?.getString("campsiteId")
+
+            val campsite = ownerCampsites.find {
+                it.id == campsiteId &&
+                        it.ownerId == profile.id &&
+                        !it.removed
+            }
+
+            when {
+                !profile.isOwner || profile.removed -> {
+                    Text("Only campsite owners can create lotteries.")
+                }
+
+                isLoadingOwnerCampsites -> {
+                    CircularProgressIndicator()
+                }
+
+                ownerCampsitesError.isNotEmpty() -> {
+                    Column {
+                        Text(ownerCampsitesError)
+
+                        Button(onClick = { ownerListRetry++ }) {
+                            Text("Retry")
+                        }
+                    }
+                }
+
+                campsite == null -> {
+                    Text("Campsite not found.")
+                }
+
+                else -> {
+                    val lotteryId = rememberSaveable(profile.id, campsite.id) {
+                        lotteryRepository.generateLotteryId()
+                    }
+
+                    var isSaving by remember(campsite.id) {
+                        mutableStateOf(false)
+                    }
+
+                    var errorMessage by remember(campsite.id) {
+                        mutableStateOf("")
+                    }
+
+                    CreateLotteryScreen(
+                        campsite = campsite,
+                        lotteryId = lotteryId,
+                        isSaving = isSaving,
+                        errorMessage = errorMessage,
+                        onCreateLottery = { lottery ->
+                            if (!isSaving) {
+                                isSaving = true
+                                errorMessage = ""
+
+                                lotteryRepository.createLottery(
+                                    lottery = lottery,
+                                    onSuccess = {
+                                        isSaving = false
+
+                                        if (navController.currentBackStackEntry == entry) {
+                                            navController.popBackStack()
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e(
+                                            "LotteryCreation",
+                                            "Cannot publish lottery",
+                                            exception
+                                        )
+
+                                        isSaving = false
+                                        errorMessage =
+                                            if (exception is IllegalArgumentException) {
+                                                exception.message
+                                                    ?: "Please check the lottery details."
+                                            } else {
+                                                "Cannot publish lottery. Please try again."
+                                            }
+                                    }
+                                )
+                            }
+                        }
                     )
                 }
             }
