@@ -351,7 +351,14 @@ fun AppNavigation(profile: UserProfile) {
 
             composable("lotteries") {
                 if (profile.isEntrant && !profile.removed) {
-                    Text("Lottery entries, not connected yet")
+                    com.charge.reservation.reservation.EntrantInvitationsScreen(
+                        entrantId = profile.id,
+                        onBookingFinished = {
+                            navController.navigate("bookings") {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
                 } else {
                     Text("Only entrants can view this page.")
                 }
