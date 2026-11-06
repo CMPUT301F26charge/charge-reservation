@@ -85,14 +85,14 @@ fun ExploreCampsitesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color.White)
             .padding(16.dp)
     ) {
         Text(
             text = "Explore campsites",
             fontSize = 21.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = Color.Black
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -120,20 +120,20 @@ fun ExploreCampsitesScreen(
             }
 
             errorMessage.isNotEmpty() -> {
-                Text(errorMessage, color = Color.White)
+                Text(errorMessage, color = Color.Black)
             }
 
             campsites.isEmpty() -> {
                 Text(
                     "No campsites available.",
-                    color = Color.White
+                    color = Color.Black
                 )
             }
 
             filteredCampsites.isEmpty() -> {
                 Text(
                     "No campsites match your search.",
-                    color = Color.White
+                    color = Color.Black
                 )
             }
 
