@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 
 import com.charge.reservation.model.Campsite
+import com.charge.reservation.model.AvailabilityDay
 
 
 /**
@@ -29,7 +30,10 @@ import com.charge.reservation.model.Campsite
 @Composable
 fun OwnerCampsiteDetailsScreen(
     campsite: Campsite?,
-    onBackClick: () -> Unit
+    availabilityDays: List<AvailabilityDay>,
+    isLoadingAvailability: Boolean,
+    availabilityError: String,
+    onRetryAvailability: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -39,10 +43,6 @@ fun OwnerCampsiteDetailsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Button(onClick = onBackClick) {
-            Text("Back")
-        }
-
         Text(
             text = "Campsite Details",
             fontSize = 28.sp
@@ -50,6 +50,21 @@ fun OwnerCampsiteDetailsScreen(
 
         if (campsite == null) {
             Text("Campsite not found.")
+            return@Column
+        }
+
+        if (isLoadingAvailability) {
+            Text("Loading campsite details...")
+            return@Column
+        }
+
+        if (availabilityError.isNotEmpty()) {
+            Text("Can not load campsite details. Please try again.")
+
+            Button(onClick = onRetryAvailability) {
+                Text("Retry")
+            }
+
             return@Column
         }
 
@@ -108,6 +123,29 @@ fun OwnerCampsiteDetailsScreen(
                                 "Not provided"
                             }
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Nightly availability")
+
+                if (availabilityDays.isEmpty()) {
+                    Text("No availability specified.")
+                } else {
+                    availabilityDays.forEach { day ->
+                        val capacity = day.guestCapacity ?: 0
+                        val remaining = capacity - day.bookedGuests
+
+                        Text("Night of ${day.date}")
+                        Text("Total guest spaces: $capacity")
+                        Text("Booked guests: ${day.bookedGuests}")
+                        Text("Remaining spaces: $remaining")
+                    }
+                }
             }
         }
 

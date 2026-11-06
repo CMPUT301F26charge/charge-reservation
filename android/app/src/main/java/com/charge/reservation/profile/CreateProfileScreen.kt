@@ -1,4 +1,4 @@
-package com.charge.reservation
+package com.charge.reservation.profile
 
 import android.util.Patterns
 import androidx.compose.foundation.layout.Arrangement

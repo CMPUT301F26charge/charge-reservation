@@ -26,15 +26,12 @@ import com.charge.reservation.model.Campsite
  *
  * Removed campsites and listings belonging to other owners
  * are excluded.
- *
- * Outstanding: Connect to the authenticated owner's data.
  */
 @Composable
 fun OwnerCampsiteListScreen(
     currentOwnerId: String,
     campsites: List<Campsite>,
     onCampsiteClick: (String) -> Unit,
-    onBackClick: () -> Unit,
     onRegisterCampsiteClick: () -> Unit
 ) {
     // ADDED: Use testable owner filtering logic.
@@ -50,11 +47,6 @@ fun OwnerCampsiteListScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ADDED: Back navigation
-        Button(onClick = onBackClick) {
-            Text("Back")
-        }
-
         Text(
             text = "My Campsites",
             fontSize = 28.sp
@@ -96,7 +88,7 @@ fun OwnerCampsiteListScreen(
                             Text(campsite.location)
 
                             campsite.maxOccupancy?.let {
-                                Text("Up to $it guests")
+                                Text("Maximum occupancy: $it guests")
                             }
                         }
                     }
