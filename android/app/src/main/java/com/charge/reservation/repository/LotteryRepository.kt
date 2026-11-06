@@ -1,8 +1,14 @@
 package com.charge.reservation.repository
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+
 import com.charge.reservation.model.Lottery
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+
 
 class LotteryRepository {
     private val firestore = FirebaseFirestore.getInstance()
@@ -139,5 +145,112 @@ class LotteryRepository {
         } catch (exception: Exception) {
             onFailure(exception)
         }
+    }
+
+    /**
+     * Loads saved lotteries for the selected owner's campsite.
+     *
+     * @param ownerId the current owner's Firebase Authentication UID.
+     * @param campsiteId the campsite whose lotteries should be returned.
+     * @param onSuccess receives matching lotteries, newest registration first.
+     * @param onFailure receives Firestore or stored data conversion errors.
+     */
+    fun getOwnerCampsiteLotteries(
+        ownerId: String,
+        campsiteId: String,
+        onSuccess: (List<Lottery>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        firestore.collection("lotteries")
+            .whereEqualTo("ownerId", ownerId)
+            .get(Source.SERVER)
+            .addOnSuccessListener { snapshot ->
+                val lotteries = try {
+                    val result = mutableListOf<Lottery>()
+
+                    for (document in snapshot.documents) {
+                        val campsiteIds =
+                            (document.get("campsiteIds") as List<*>)
+                                .map { it as String }
+
+                        if (campsiteId !in campsiteIds) {
+                            continue
+                        }
+
+                        result.add(
+                            Lottery(
+                                id = document.id,
+                                ownerId = requireNotNull(
+                                    document.getString("ownerId")
+                                ),
+                                campsiteIds = campsiteIds,
+                                registrationStartAt = timestampToInstant(
+                                    requireNotNull(
+                                        document.getTimestamp("registrationStartAt")
+                                    )
+                                ),
+                                registrationEndAt = timestampToInstant(
+                                    requireNotNull(
+                                        document.getTimestamp("registrationEndAt")
+                                    )
+                                ),
+                                bookingDeadline = timestampToInstant(
+                                    requireNotNull(
+                                        document.getTimestamp("bookingDeadline")
+                                    )
+                                ),
+                                bookingStartDate = LocalDate.parse(
+                                    requireNotNull(
+                                        document.getString("bookingStartDate")
+                                    )
+                                ),
+                                bookingEndDate = LocalDate.parse(
+                                    requireNotNull(
+                                        document.getString("bookingEndDate")
+                                    )
+                                ),
+                                timeZone = ZoneId.of(
+                                    requireNotNull(
+                                        document.getString("timeZone")
+                                    )
+                                ),
+                                winnerCount = Math.toIntExact(
+                                    requireNotNull(
+                                        document.getLong("winnerCount")
+                                    )
+                                ),
+                                waitlistCapacity =
+                                    document.getLong("waitlistCapacity")?.let {
+                                        Math.toIntExact(it)
+                                    },
+                                drawCompletedAt =
+                                    document.getTimestamp("drawCompletedAt")?.let {
+                                        timestampToInstant(it)
+                                    }
+                            )
+                        )
+                    }
+
+                    result.sortedByDescending { it.registrationStartAt }
+                } catch (exception: Exception) {
+                    onFailure(exception)
+                    return@addOnSuccessListener
+                }
+
+                onSuccess(lotteries)
+            }
+            .addOnFailureListener { exception ->
+                onFailure(exception)
+            }
+    }
+
+    /**
+     * Converts a saved Firebase timestamp into an Instant.
+     */
+    private fun timestampToInstant(timestamp: Timestamp): Instant {
+        return Instant.ofEpochSecond(
+            timestamp.seconds,
+            timestamp.nanoseconds.toLong()
+        )
     }
 }

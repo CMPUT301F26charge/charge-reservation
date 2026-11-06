@@ -45,9 +45,13 @@ import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
+import com.charge.reservation.model.Lottery
 
 /**
- * Navigates between home and campsite registration.
+ * Connects role navigation with campsite and lottery repository operations.
+ * Entrant lottery and booking destinations are currently placeholders.
+ *
+ * @param profile signed-in user's profile used for role and ownership checks.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +62,7 @@ fun AppNavigation(profile: UserProfile) {
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
+        "createLottery/{campsiteId}",
         "personalInfo",
         "notifications",
         "messages",
@@ -420,6 +425,22 @@ fun AppNavigation(profile: UserProfile) {
                         mutableStateOf(0)
                     }
 
+                    var lotteries by remember(profile.id, campsite?.id) {
+                        mutableStateOf<List<Lottery>>(emptyList())
+                    }
+
+                    var isLoadingLotteries by remember(profile.id, campsite?.id) {
+                        mutableStateOf(true)
+                    }
+
+                    var lotteriesError by remember(profile.id, campsite?.id) {
+                        mutableStateOf("")
+                    }
+
+                    var lotteriesRetry by remember(profile.id, campsite?.id) {
+                        mutableStateOf(0)
+                    }
+
                     if (campsite != null) {
                         DisposableEffect(campsite.id, availabilityRetry) {
                             var active = true
@@ -453,6 +474,49 @@ fun AppNavigation(profile: UserProfile) {
 
                             onDispose { active = false }
                         }
+
+                        DisposableEffect(
+                            profile.id,
+                            campsite.id,
+                            lotteriesRetry,
+                            currentScreenEntry
+                        ) {
+                            var active = true
+
+                            // Reload when returning to this campsite's details.
+                            if (currentScreenEntry == entry) {
+                                isLoadingLotteries = true
+                                lotteriesError = ""
+
+                                lotteryRepository.getOwnerCampsiteLotteries(
+                                    ownerId = profile.id,
+                                    campsiteId = campsite.id,
+                                    onSuccess = { savedLotteries ->
+                                        if (active) {
+                                            lotteries = savedLotteries
+                                            isLoadingLotteries = false
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        if (active) {
+                                            Log.e(
+                                                "CampsiteLotteries",
+                                                "Can not load campsite lotteries",
+                                                exception
+                                            )
+
+                                            lotteries = emptyList()
+                                            lotteriesError =
+                                                "Can not load lotteries. Please try again."
+                                            isLoadingLotteries = false
+                                        }
+                                    }
+                                )
+                            }
+
+                            // Ignore results after this request's effect is disposed.
+                            onDispose { active = false }
+                        }
                     }
 
                     OwnerCampsiteDetailsScreen(
@@ -460,6 +524,10 @@ fun AppNavigation(profile: UserProfile) {
                         availabilityDays = availabilityDays,
                         isLoadingAvailability = isLoadingAvailability,
                         availabilityError = availabilityError,
+                        lotteries = lotteries,
+                        isLoadingLotteries = isLoadingLotteries,
+                        lotteriesError = lotteriesError,
+                        onRetryLotteries = { lotteriesRetry++ },
                         onRetryAvailability = { availabilityRetry++ },
                         onCreateLotteryClick = {
                             if (campsite != null) {

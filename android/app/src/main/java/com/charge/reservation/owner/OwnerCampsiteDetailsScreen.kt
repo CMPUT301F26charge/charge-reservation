@@ -19,13 +19,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.material3.MaterialTheme
+import com.charge.reservation.model.Lottery
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
 
 
 /**
- * Displays saved campsite details and its optional promotional image.
+ * Displays saved campsite details, availability and lottery configuration.
+ *
+ * @param lotteries saved lotteries associated with this campsite.
+ * @param isLoadingLotteries whether a lottery request is pending.
+ * @param lotteriesError load failure message, or empty when no error exists.
+ * @param onRetryLotteries requests another attempt after a failed load.
  */
 @Composable
 fun OwnerCampsiteDetailsScreen(
@@ -33,6 +43,10 @@ fun OwnerCampsiteDetailsScreen(
     availabilityDays: List<AvailabilityDay>,
     isLoadingAvailability: Boolean,
     availabilityError: String,
+    lotteries: List<Lottery>,
+    isLoadingLotteries: Boolean,
+    lotteriesError: String,
+    onRetryLotteries: () -> Unit,
     onRetryAvailability: () -> Unit,
     onCreateLotteryClick: () -> Unit
 ) {
@@ -177,5 +191,103 @@ fun OwnerCampsiteDetailsScreen(
                 }
             }
         }
+
+        Text(
+            text = "Saved lotteries",
+            fontSize = 20.sp
+        )
+
+        when {
+            isLoadingLotteries -> {
+                Text("Loading lotteries...")
+            }
+
+            lotteriesError.isNotEmpty() -> {
+                Text(
+                    text = lotteriesError,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Button(onClick = onRetryLotteries) {
+                    Text("Retry")
+                }
+            }
+
+            lotteries.isEmpty() -> {
+                Text("No lotteries published for this campsite.")
+            }
+
+            else -> {
+                val now = Instant.now()
+
+                lotteries.forEach { lottery ->
+                    val opens = lottery.registrationStartAt
+                    val closes = lottery.registrationEndAt
+
+                    val registrationStatus = when {
+                        opens == null || closes == null -> "Unavailable"
+                        now.isBefore(opens) -> "Not open yet"
+                        now.isBefore(closes) -> "Open"
+                        else -> "Closed"
+                    }
+
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("Registration: $registrationStatus")
+
+                            Text(
+                                "Registration opens: " +
+                                        lotteryDateTimeText(
+                                            lottery.registrationStartAt,
+                                            lottery.timeZone
+                                        )
+                            )
+
+                            Text(
+                                "Registration closes: " +
+                                        lotteryDateTimeText(
+                                            lottery.registrationEndAt,
+                                            lottery.timeZone
+                                        )
+                            )
+
+                            Text("Earliest check-in: ${lottery.bookingStartDate}")
+                            Text("Latest checkout: ${lottery.bookingEndDate}")
+
+                            Text(
+                                "Booking deadline: " +
+                                        lotteryDateTimeText(
+                                            lottery.bookingDeadline,
+                                            lottery.timeZone
+                                        )
+                            )
+
+                            Text("Number of winners: ${lottery.winnerCount}")
+                        }
+                    }
+                }
+            }
+        }
     }
+
+}
+
+/**
+ * Formats a saved instant in the lottery's stored time zone.
+ *
+ * @return date, time and zone ID, or "Not specified" for missing values.
+ */
+private fun lotteryDateTimeText(
+    instant: Instant?,
+    timeZone: ZoneId?
+): String {
+    if (instant == null || timeZone == null) {
+        return "Not specified"
+    }
+
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm VV")
+    return instant.atZone(timeZone).format(formatter)
 }
