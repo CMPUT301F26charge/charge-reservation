@@ -9,16 +9,31 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 
-
+/**
+ * Saves lotteries and loads them for campsite details.
+ */
 class LotteryRepository {
     private val firestore = FirebaseFirestore.getInstance()
 
+    /**
+     * Generates an unused lottery document ID without saving a document.
+     *
+     * @return the ID to retain while the creation form is open.
+     */
     fun generateLotteryId(): String {
         return firestore.collection("lotteries").document().id
     }
 
     /**
-     * Creates a lottery for one registered campsite.
+     * Creates a lottery for one active campsite belonging to its owner.
+     *
+     * Validates the required configuration and saves it in a transaction.
+     * An existing lottery with the same ID is never overwritten.
+     *
+     * @param lottery the configuration to validate and save.
+     * @param onSuccess called after the lottery is successfully saved.
+     * @param onFailure receives validation, ownership, duplicate ID or
+     * Firestore errors. A failed save does not report success.
      */
     fun createLottery(
         lottery: Lottery,
