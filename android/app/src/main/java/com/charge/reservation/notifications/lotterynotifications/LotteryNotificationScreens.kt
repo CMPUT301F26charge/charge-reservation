@@ -48,11 +48,11 @@ import androidx.navigation.NavController
 private val Green = Color(0xFF41D49A)
 private val Grey = Color(0xFFB5B5B5)
 private val Red = Color(0xFFE5666E)
-private val CardBg = Color(0xFF121413)
+private val CardBg = Color(0xFFFFFFFF)
 private val CardBorder = Color(0xFF333B37)
 private val WonCardBg = Color(0xFF10261C)
 private val LostCardBg = Color(0xFF2A1618)
-private val ScreenBg = Color(0xFF050505)
+private val ScreenBg = Color(0xFFFFFFFF)
 
 // ---------------------------------------------------------------------------
 // Lottery Won Notification
@@ -68,7 +68,7 @@ fun LotteryWonNotificationScreen(
     lotteryName: String = "Pine Lake Autumn Lottery",
     lotteryCode: String = "LOT-204",
     bookingDeadline: String = "Oct 28, 2026",
-    roleLabel: String = "ENTRANT • US 01.03.01",
+    roleLabel: String = "",
     onDecline: () -> Unit = {},
     isDeclining: Boolean = false,
     declineError: Boolean = false,
