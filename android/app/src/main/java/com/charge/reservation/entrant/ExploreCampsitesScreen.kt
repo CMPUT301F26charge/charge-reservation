@@ -25,7 +25,7 @@ fun ExploreCampsitesScreen(
 ) {
 
     val campsite1 = Campsite(
-        id = "1",
+        id = "JtreH43aiWdJeC773aju",
         name = "Pine Lake Campground",
         location = "Banff, Alberta",
         maxOccupancy = 4,
