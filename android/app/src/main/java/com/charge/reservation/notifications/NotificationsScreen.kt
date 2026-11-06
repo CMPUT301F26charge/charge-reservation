@@ -43,9 +43,9 @@ import com.charge.reservation.model.NotificationType
 
 private val Green = Color(0xFF41D49A)
 private val Grey = Color(0xFFB5B5B5)
-private val CardBg = Color(0xFF121413)
+private val CardBg = Color(0xFFFFFFFF)
 private val CardBorder = Color(0xFF333B37)
-private val ScreenBg = Color(0xFF050505)
+private val ScreenBg = Color(0xFFFFFFFF)
 
 private enum class BottomTab(val label: String, val icon: ImageVector) {
     EXPLORE("Explore", Icons.Outlined.Home),
@@ -65,7 +65,7 @@ private enum class BottomTab(val label: String, val icon: ImageVector) {
 fun NotificationsScreen(
     notifications: List<Notification>,
     onOpenLottery: (String) -> Unit,
-    roleLabel: String = "ENTRANT • US 01.03.01, 01.03.02",
+    roleLabel: String = "",
     navController: NavController
 ) {
     Column(
