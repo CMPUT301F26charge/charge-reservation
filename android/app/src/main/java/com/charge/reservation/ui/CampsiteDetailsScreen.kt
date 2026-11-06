@@ -23,7 +23,11 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.AvailabilityDay
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import com.charge.reservation.LotteryButtonState
 
 @Composable
@@ -35,6 +39,9 @@ fun CampsiteDetailsScreen(
     lotteryButtonState: LotteryButtonState = LotteryButtonState.UNAVAILABLE,
     isLotteryActionWorking: Boolean = false,
     lotteryActionError: String = "",
+    availabilityDays: List<AvailabilityDay> = emptyList(),
+    isLoadingAvailability: Boolean = true,
+    availabilityError: String = "",
     onLotteryAction: () -> Unit = {}
 ) {
     val green = Color(0xFF087F5B)
@@ -52,7 +59,10 @@ fun CampsiteDetailsScreen(
         waitlistCount >= capacity
     } ?: false
 
-    val joinEnabled = registrationOpen && !waitlistFull
+    val availableDays = availabilityDays.filter { day ->
+        day.date != null && !day.date.isBefore(LocalDate.now()) &&
+                (day.guestCapacity ?: 0) > day.bookedGuests
+    }.sortedBy { it.date }
 
     Column(
         modifier = Modifier
@@ -200,14 +210,19 @@ fun CampsiteDetailsScreen(
             Column(modifier = Modifier.padding(14.dp)) {
                 Text("Available dates", color = Color.Black)
 
-                Text(
-                    "Availability will be loaded from campsite records",
-                    color = grey
-                )
+                when {
+                    isLoadingAvailability -> Text("Loading available dates...", color = grey)
+                    availabilityError.isNotEmpty() -> Text(availabilityError, color = grey)
+                    availableDays.isEmpty() -> Text("No available nights.", color = grey)
+                    else -> availableDays.forEach { day ->
+                        val spots = (day.guestCapacity ?: 0) - day.bookedGuests
+                        Text("${day.date}: $spots guest spaces available", color = grey)
+                    }
+                }
 
                 Text(
                     campsite.pricePerNight?.let {
-                        "$${String.format(Locale.US, "%.2f", it)} per night"
+                        "\$${String.format(Locale.US, "%.2f", it)} per night"
                     } ?: "Price unavailable",
                     color = grey
                 )
@@ -281,10 +296,40 @@ fun CampsiteDetailsScreen(
             fontSize = 17.sp
         )
 
-        Text(
-            "Lottery information will be connected next",
-            color = grey
-        )
+        if (lottery == null) {
+            Text("No lottery available for this campsite.", color = grey)
+        } else {
+            val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
+                .withZone(lottery.timeZone ?: ZoneId.systemDefault())
+
+            Text(
+                "Registration opens: " + (lottery.registrationStartAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Registration closes: " + (lottery.registrationEndAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Waitlist: $waitlistCount" +
+                        (lottery.waitlistCapacity?.let { " / $it" } ?: " (no limit)"),
+                color = grey
+            )
+
+            val status = when {
+                lottery.drawCompletedAt != null -> "Draw completed"
+                registrationOpen && waitlistFull -> "Waitlist full"
+                registrationOpen -> "Registration open"
+                lottery.registrationStartAt != null &&
+                        now.isBefore(lottery.registrationStartAt) -> "Not open yet"
+                else -> "Registration closed"
+            }
+            Text("Status: $status", color = grey)
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
