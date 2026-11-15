@@ -39,6 +39,7 @@ data class Lottery (
     val timeZone: ZoneId? = null,
 
     val waitlistCapacity: Int? = null,
+    var waitlistSize: Int? = null,
     val winnerCount: Int? = null,
     val drawCompletedAt: Instant? = null
     )

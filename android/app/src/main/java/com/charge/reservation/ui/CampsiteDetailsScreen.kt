@@ -23,15 +23,37 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.AvailabilityDay
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import com.charge.reservation.LotteryButtonState
 
+/**
+ * Shows campsite details, availability, policies, and the lottery entry button.
+ * @param campsite selected campsite
+ * @param onBack returns to campsite browsing
+ * @param lottery associated lottery, if available
+ * @param waitlistCount current number of waitlisted entrants
+ * @param lotteryButtonState current join/leave button state
+ * @param isLotteryActionWorking whether a lottery action is running
+ * @param lotteryActionError error displayed after a failed action
+ * @param onLotteryAction called when the join/leave button is selected
+ */
 @Composable
 fun CampsiteDetailsScreen(
     campsite: Campsite,
     onBack: () -> Unit,
-    onJoinLottery: () -> Unit,
     lottery: Lottery? = null,
-    waitlistCount: Int = 0
+    waitlistCount: Int = 0,
+    lotteryButtonState: LotteryButtonState = LotteryButtonState.UNAVAILABLE,
+    isLotteryActionWorking: Boolean = false,
+    lotteryActionError: String = "",
+    availabilityDays: List<AvailabilityDay> = emptyList(),
+    isLoadingAvailability: Boolean = true,
+    availabilityError: String = "",
+    onLotteryAction: () -> Unit = {}
 ) {
     val green = Color(0xFF087F5B)
     val grey = Color(0xFF666666)
@@ -48,7 +70,10 @@ fun CampsiteDetailsScreen(
         waitlistCount >= capacity
     } ?: false
 
-    val joinEnabled = registrationOpen && !waitlistFull
+    val availableDays = availabilityDays.filter { day ->
+        day.date != null && !day.date.isBefore(LocalDate.now()) &&
+                (day.guestCapacity ?: 0) > day.bookedGuests
+    }.sortedBy { it.date }
 
     Column(
         modifier = Modifier
@@ -196,14 +221,19 @@ fun CampsiteDetailsScreen(
             Column(modifier = Modifier.padding(14.dp)) {
                 Text("Available dates", color = Color.Black)
 
-                Text(
-                    "Availability will be loaded from campsite records",
-                    color = grey
-                )
+                when {
+                    isLoadingAvailability -> Text("Loading available dates...", color = grey)
+                    availabilityError.isNotEmpty() -> Text(availabilityError, color = grey)
+                    availableDays.isEmpty() -> Text("No available nights.", color = grey)
+                    else -> availableDays.forEach { day ->
+                        val spots = (day.guestCapacity ?: 0) - day.bookedGuests
+                        Text("${day.date}: $spots guest spaces available", color = grey)
+                    }
+                }
 
                 Text(
                     campsite.pricePerNight?.let {
-                        "$${String.format(Locale.US, "%.2f", it)} per night"
+                        "\$${String.format(Locale.US, "%.2f", it)} per night"
                     } ?: "Price unavailable",
                     color = grey
                 )
@@ -277,33 +307,69 @@ fun CampsiteDetailsScreen(
             fontSize = 17.sp
         )
 
-        Text(
-            "Lottery information will be connected next",
-            color = grey
-        )
+        if (lottery == null) {
+            Text("No lottery available for this campsite.", color = grey)
+        } else {
+            val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
+                .withZone(lottery.timeZone ?: ZoneId.systemDefault())
+
+            Text(
+                "Registration opens: " + (lottery.registrationStartAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Registration closes: " + (lottery.registrationEndAt?.let {
+                    dateFormat.format(it)
+                } ?: "Not set"),
+                color = grey
+            )
+            Text(
+                "Waitlist: $waitlistCount" +
+                        (lottery.waitlistCapacity?.let { " / $it" } ?: " (no limit)"),
+                color = grey
+            )
+
+            val status = when {
+                lottery.drawCompletedAt != null -> "Draw completed"
+                registrationOpen && waitlistFull -> "Waitlist full"
+                registrationOpen -> "Registration open"
+                lottery.registrationStartAt != null &&
+                        now.isBefore(lottery.registrationStartAt) -> "Not open yet"
+                else -> "Registration closed"
+            }
+            Text("Status: $status", color = grey)
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
-            onClick = onJoinLottery,
-            enabled = joinEnabled,
+            onClick = onLotteryAction,
+            enabled = lotteryButtonState.enabled && !isLotteryActionWorking,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = green,
-                contentColor = Color.White
+                contentColor = Color.White,
+                disabledContainerColor = Color(0xFF2A2F2C),
+                disabledContentColor = grey
             )
         ) {
-            Text("Join Lottery", fontWeight = FontWeight.Bold)
+            if (isLotteryActionWorking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = Color.Black
+                )
+            } else {
+                Text(lotteryButtonState.label, fontWeight = FontWeight.Bold)
+            }
         }
 
-        if (!joinEnabled) {
-            Text(
-                "Lottery joining is not available yet",
-                color = grey,
-                fontSize = 12.sp
-            )
+        if (lotteryActionError.isNotEmpty()) {
+            Text(lotteryActionError, color = Color(0xFFFF6B6B), fontSize = 12.sp)
         }
     }
 }
