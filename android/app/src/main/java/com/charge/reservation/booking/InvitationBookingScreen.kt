@@ -51,6 +51,12 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.charge.reservation.model.Reservation
+import com.charge.reservation.model.ReservationStatus
+import com.charge.reservation.reservation.BookingResult
+import com.charge.reservation.reservation.ReservationConfirmationScreen
 
 private val nightFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
 private val fullDateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")
@@ -103,6 +109,24 @@ fun InvitationBookingContent(
     onMessageShown: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    var showRules by remember { mutableStateOf(false) }
+
+    if (showRules && state.selectedCampsite != null) {
+        RulesAcknowledgementScreen(
+            campsite = state.selectedCampsite!!,
+            bookingId = "${state.selectedCampsiteId}-${state.checkIn}-${state.checkOut}",
+            onConfirmClick = {
+                if (!state.submitting) {
+                    showRules = false
+                    onBook()
+                }
+            },
+            onBackClick = {
+                showRules = false
+            }
+        )
+        return
+    }
     LaunchedEffect(state.message) {
         state.message?.let {
             snackbarHostState.showSnackbar(it)
@@ -124,8 +148,18 @@ fun InvitationBookingContent(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             if (state.showForm) {
-                BookingBar(state = state, onClearSelection = onClearSelection, onBook = onBook)
-            }
+                BookingBar(
+                    state = state,
+                    onClearSelection = onClearSelection,
+                    onBook = {
+                        if (state.checkIn != null &&
+                            state.checkOut != null &&
+                            !state.submitting
+                        ) {
+                            showRules = true
+                        }
+                    }
+                )            }
         }
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
@@ -140,8 +174,27 @@ fun InvitationBookingContent(
                     onSecondary = onBack
                 )
 
-                state.confirmation != null -> ConfirmationView(state.confirmation, onDone)
+                state.confirmation != null -> {
+                    val confirmation = state.confirmation!!
 
+                    ReservationConfirmationScreen(
+                        result = BookingResult.Success(
+                            reservation = Reservation(
+                                id = confirmation.reservationId,
+                                campsiteId = state.selectedCampsiteId.orEmpty(),
+                                lotteryId = state.details?.lottery?.id.orEmpty(),
+                                checkInDate = confirmation.checkIn,
+                                checkOutDate = confirmation.checkOut,
+                                guestCount = confirmation.guestCount,
+                                status = ReservationStatus.CONFIRMED
+                            ),
+                            campsiteName = confirmation.campsiteName
+                        ),
+                        onDoneClick = {
+                            onDone(confirmation.reservationId)
+                        }
+                    )
+                }
                 else -> BookingForm(
                     state = state,
                     onSelectCampsite = onSelectCampsite,
