@@ -1,41 +1,54 @@
 package com.charge.reservation.notifications.lotterynotifications
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
 import com.charge.reservation.model.ParticipationStatus
-import java.time.Instant
 
 /**
- * Opened when the user taps a lottery notification. Loads the entrant's
- * participation and shows the matching screen:
- *  - INVITED (deadline not passed)  -> won screen (with a decline button)
- *  - NOT_SELECTED                   -> lost screen
- *  - anything else / load problems  -> a status message screen
+ * Opened when the user taps "View lottery" on a notification. Always shows a screen:
+ *  - INVITED, deadline not passed -> won screen: pick a campsite (if the lottery has
+ *                                    several) and book, or decline
+ *  - NOT_SELECTED                 -> lost screen
+ *  - USED                         -> booking confirmed, with the reservation's details
+ *  - INVITED past deadline/EXPIRED -> "Booking deadline passed"
+ *  - DECLINED/CANCELLED/WITHDRAWN/WAITING -> a matching message
+ *  - missing data / load failure  -> a message with a way back or to retry
  *
  * @param lotteryId the notification's lotteryId
  * @param entrantId the signed-in user's id (UserProfile.id, the Firebase Auth UID)
+ * @param onOpenInvitation opens the booking flow (InvitationBookingScreen) for a lottery,
+ * with the campsite the winner picked, or null to let them choose there
+ * @param onBack returns to the notification list
  */
 @Composable
 fun LotteryNotificationRoute(
     lotteryId: String,
     entrantId: String?,
-    vm: LotteryNotificationViewModel = viewModel(),
-    navController: NavController
+    onOpenInvitation: (lotteryId: String, campsiteId: String?) -> Unit,
+    onBack: () -> Unit,
+    vm: LotteryNotificationViewModel = viewModel(key = "lottery-notification-$lotteryId")
 ) {
-    LaunchedEffect(lotteryId, entrantId) {
-        if (entrantId != null) vm.load(lotteryId, entrantId)
+    // Load when shown, and refresh when the user comes back from booking.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentEntrantId by rememberUpdatedState(entrantId)
+    DisposableEffect(lifecycleOwner, lotteryId) {
+        val observer = LifecycleEventObserver { _, event ->
+            val id = currentEntrantId
+            if (event == Lifecycle.Event.ON_RESUME && id != null) {
+                vm.onScreenResumed(lotteryId, id)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
     val state by vm.state.collectAsStateWithLifecycle()
     val declining by vm.declining.collectAsStateWithLifecycle()
     val declineError by vm.declineError.collectAsStateWithLifecycle()
@@ -44,39 +57,35 @@ fun LotteryNotificationRoute(
         LotteryStatusMessageScreen(
             heading = "Not signed in",
             message = "Sign in to view this lottery notification.",
-            navController = navController
-
+            onBack = onBack
         )
         return
     }
 
     when (val s = state) {
-        LotteryNotificationState.Loading -> Box(
-            modifier = Modifier.fillMaxSize().background(Color(0xFF050505)),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = Color(0xFF41D49A))
-        }
+        LotteryNotificationState.Loading -> LotteryLoadingScreen()
 
         LotteryNotificationState.NotFound -> LotteryStatusMessageScreen(
             heading = "Lottery not found",
-            message = "This lottery or your entry could not be found.",
-            navController = navController
+            message = "This lottery or your entry in it could not be found. It may have been removed.",
+            onBack = onBack
         )
 
         LotteryNotificationState.Error -> LotteryStatusMessageScreen(
             heading = "Something went wrong",
-            message = "We couldn't load this notification. Please try again.",
-            navController = navController
+            message = "We couldn't load this notification. Check your connection and try again.",
+            onBack = onBack,
+            primaryText = "Try again",
+            onPrimaryAction = vm::retry
         )
 
         is LotteryNotificationState.Loaded -> LoadedLotteryNotification(
             data = s.data,
             isDeclining = declining,
             declineError = declineError,
-            onDecline = { vm.declineInvitation(lotteryId, entrantId, navController) },
-            navController,
-            lotteryID = lotteryId
+            onOpenInvitation = { campsiteId -> onOpenInvitation(lotteryId, campsiteId) },
+            onDecline = vm::declineInvitation,
+            onBack = onBack
         )
     }
 }
@@ -85,12 +94,12 @@ fun LotteryNotificationRoute(
 private fun LoadedLotteryNotification(
     data: LotteryNotificationData,
     isDeclining: Boolean,
-    declineError: Boolean,
+    declineError: String?,
+    onOpenInvitation: (campsiteId: String?) -> Unit,
     onDecline: () -> Unit,
-    navController: NavController,
-    lotteryID: String
+    onBack: () -> Unit
 ) {
-    val deadlinePassed = data.bookingDeadline?.let { Instant.now().isAfter(it) } ?: false
+    val deadlinePassed = data.deadlinePassed()
 
     when {
         data.status == ParticipationStatus.INVITED && !deadlinePassed ->
@@ -98,18 +107,27 @@ private fun LoadedLotteryNotification(
                 lotteryName = data.lotteryName,
                 lotteryCode = data.lotteryCode,
                 bookingDeadline = data.deadlineText,
+                campsites = data.campsites,
+                onOpenInvitation = onOpenInvitation,
                 onDecline = onDecline,
                 isDeclining = isDeclining,
-                declineError = declineError,
-                navController = navController,
-                lotteryId = lotteryID
+                declineError = declineError
             )
 
         data.status == ParticipationStatus.NOT_SELECTED ->
             LotteryLostNotificationScreen(
                 lotteryName = data.lotteryName,
                 lotteryCode = data.lotteryCode,
-                navController = navController
+                onBack = onBack
+            )
+
+        data.status == ParticipationStatus.USED ->
+            LotteryBookingConfirmedScreen(
+                lotteryName = data.lotteryName,
+                lotteryCode = data.lotteryCode,
+                campsiteName = data.reservationCampsiteName,
+                reservation = data.reservation,
+                onBack = onBack
             )
 
         else -> {
@@ -119,7 +137,7 @@ private fun LoadedLotteryNotification(
                 lotteryCode = data.lotteryCode,
                 heading = heading,
                 message = message,
-                navController = navController
+                onBack = onBack
             )
         }
     }
@@ -128,14 +146,13 @@ private fun LoadedLotteryNotification(
 private fun LotteryNotificationData.unavailableText(deadlinePassed: Boolean): Pair<String, String> =
     when {
         status == ParticipationStatus.EXPIRED ||
-                (status == ParticipationStatus.INVITED && deadlinePassed) ->
-            "Invitation expired" to "The booking deadline for this lottery has passed."
-
-        status == ParticipationStatus.USED ->
-            "Invitation used" to "You already booked a reservation with this invitation."
+            (status == ParticipationStatus.INVITED && deadlinePassed) ->
+            "Booking deadline passed" to
+                "The booking deadline for this lottery ($deadlineText) has passed, so this invitation has expired."
 
         status == ParticipationStatus.DECLINED ->
-            "Invitation declined" to "You declined the invitation for this lottery."
+            "Invitation declined" to
+                "You declined the invitation for this lottery and can no longer book with it."
 
         status == ParticipationStatus.CANCELLED ->
             "Participation cancelled" to "Your entry or invitation for this lottery was cancelled."

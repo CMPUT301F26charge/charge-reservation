@@ -55,6 +55,7 @@ import com.charge.reservation.model.Lottery
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.charge.reservation.booking.InvitationBookingScreen
+import com.charge.reservation.notifications.lotterynotifications.LotteryNotificationRoute
 
 import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
@@ -78,7 +79,7 @@ fun AppNavigation(
         "ownerCampsiteDetails/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}",
-        "invitation/{lotteryId}",
+        "lotteryNotification/{lotteryId}",
         "personalInfo",
         "notifications",
         "messages",
@@ -426,17 +427,50 @@ fun AppNavigation(
             }
 
             composable(
-                route = "invitation/{lotteryId}",
-                arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
+                // campsiteId is optional: it preselects a campsite when the lottery has several.
+                route = "invitation/{lotteryId}?campsiteId={campsiteId}",
+                arguments = listOf(
+                    navArgument("lotteryId") { type = NavType.StringType },
+                    navArgument("campsiteId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
             ) { entry ->
                 val lotteryId = entry.arguments?.getString("lotteryId")
+                val campsiteId = entry.arguments?.getString("campsiteId")
                 if (lotteryId == null || !profile.isEntrant || profile.removed) {
                     Text("Only entrants can open invitations.")
                 } else {
                     InvitationBookingScreen(
                         lotteryId = lotteryId,
+                        initialCampsiteId = campsiteId,
                         onBack = { navController.popBackStack() },
                         onBooked = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            // Opened from a lottery notification's "View lottery" button. Shows the
+            // result (won / lost / deadline passed / booked / ...) and, for winners,
+            // the decline button and the way into the invitation booking flow.
+            composable(
+                route = "lotteryNotification/{lotteryId}",
+                arguments = listOf(navArgument("lotteryId") { type = NavType.StringType })
+            ) { entry ->
+                val lotteryId = entry.arguments?.getString("lotteryId")
+                if (lotteryId == null || !profile.isEntrant || profile.removed) {
+                    Text("Only entrants can view lottery notifications.")
+                } else {
+                    LotteryNotificationRoute(
+                        lotteryId = lotteryId,
+                        entrantId = profile.id,
+                        onOpenInvitation = { id, campsiteId ->
+                            val query = campsiteId?.let { "?campsiteId=${Uri.encode(it)}" }.orEmpty()
+                            navController.navigate("invitation/${Uri.encode(id)}$query")
+                        },
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -538,8 +572,10 @@ fun AppNavigation(
             composable("notifications") {
                 NotificationsRoute(
                     userId = profile.id,
-                    onOpenLottery = { lotteryId: String -> Unit },
-                    navController
+                    onOpenLottery = { lotteryId ->
+                        navController.navigate("lotteryNotification/${Uri.encode(lotteryId)}")
+                    },
+                    navController = navController
                 )
             }
 

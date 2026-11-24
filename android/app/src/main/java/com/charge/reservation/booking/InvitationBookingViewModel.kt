@@ -73,7 +73,9 @@ data class BookingUiState(
 
 class InvitationBookingViewModel(
     private val lotteryId: String,
-    private val repository: InvitationBookingRepository
+    private val repository: InvitationBookingRepository,
+    /** Campsite the winner already picked (e.g. on the lottery won screen), or null. */
+    private val initialCampsiteId: String? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BookingUiState())
@@ -89,7 +91,10 @@ class InvitationBookingViewModel(
             try {
                 val details = repository.loadInvitation(lotteryId)
                 _state.update { it.copy(loading = false, details = details) }
-                selectCampsite(details.campsites.first().id)
+                // Start on the campsite the winner picked, if it's still bookable.
+                val startId = details.campsites.firstOrNull { it.id == initialCampsiteId }?.id
+                    ?: details.campsites.first().id
+                selectCampsite(startId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -225,8 +230,10 @@ class InvitationBookingViewModel(
     }
 
     companion object {
-        fun factory(lotteryId: String) = viewModelFactory {
-            initializer { InvitationBookingViewModel(lotteryId, InvitationBookingRepository()) }
+        fun factory(lotteryId: String, initialCampsiteId: String? = null) = viewModelFactory {
+            initializer {
+                InvitationBookingViewModel(lotteryId, InvitationBookingRepository(), initialCampsiteId)
+            }
         }
     }
 }

@@ -1,33 +1,25 @@
 package com.charge.reservation.notifications.lotterynotifications
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Diamond
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Person
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,56 +31,51 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import com.charge.reservation.model.Reservation
+import com.charge.reservation.model.ReservationStatus
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-private val Green = Color(0xFF41D49A)
-private val Grey = Color(0xFFB5B5B5)
-private val Red = Color(0xFFE5666E)
-private val CardBg = Color(0xFFFFFFFF)
-private val CardBorder = Color(0xFF333B37)
-private val WonCardBg = Color(0xFF10261C)
-private val LostCardBg = Color(0xFF2A1618)
-private val ScreenBg = Color(0xFFFFFFFF)
+// These screens sit inside AppNavigation's Scaffold, which already provides the
+// top bar (with back button) and bottom bar, so they don't draw their own.
+// Colours come from MaterialTheme to match the rest of the app.
+
+private val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.getDefault())
 
 // ---------------------------------------------------------------------------
 // Lottery Won Notification
 // ---------------------------------------------------------------------------
 
 /**
- * Screen shown when the user taps a "lottery won" notification.
- * The default parameter values are sample data matching the design mockup;
- * pass real values from the Lottery / Notification objects.
+ * Shown when the entrant is INVITED and the booking deadline hasn't passed.
+ *
+ * If the lottery has several campsites, each is listed so the winner can pick
+ * the one to book at; [onOpenInvitation] receives the picked campsite's ID.
+ * With one campsite (or from the main button) it receives that campsite's ID or null.
  */
 @Composable
 fun LotteryWonNotificationScreen(
-    lotteryName: String = "Pine Lake Autumn Lottery",
-    lotteryCode: String = "LOT-204",
-    bookingDeadline: String = "Oct 28, 2026",
-    roleLabel: String = "",
-    onDecline: () -> Unit = {},
-    isDeclining: Boolean = false,
-    declineError: Boolean = false,
-    navController: NavController,
-    lotteryId: String
+    lotteryName: String,
+    lotteryCode: String,
+    bookingDeadline: String,
+    campsites: List<CampsiteOption>,
+    onOpenInvitation: (campsiteId: String?) -> Unit,
+    onDecline: () -> Unit,
+    isDeclining: Boolean,
+    declineError: String?
 ) {
     var showDeclineDialog by remember { mutableStateOf(false) }
 
-    LotteryNotificationScaffold(
-        title = "Lottery Won Notification",
-        roleLabel = roleLabel,
-        buttonText = "Open winning invitation",
-        onBack = {
-            navController.popBackStack()
-        },
-        onPrimaryAction = {
-            // TODO: navigate to winning invitation page
-            navController.navigate("invitation/${lotteryId}")
-        },
-        secondaryButtonText = if (isDeclining) "Declining…" else "Decline invitation",
+    val multipleCampsites = campsites.size > 1
+
+    LotteryNotificationLayout(
+        title = "Lottery Won",
+        primaryText = "Open invitation & book",
+        onPrimaryAction = { onOpenInvitation(campsites.singleOrNull()?.id) },
+        primaryEnabled = !isDeclining,
+        secondaryText = if (isDeclining) "Declining…" else "Decline invitation",
         onSecondaryAction = { if (!isDeclining) showDeclineDialog = true }
     ) {
         OutcomeCard(
@@ -97,30 +84,46 @@ fun LotteryWonNotificationScreen(
                 "$lotteryName • $lotteryCode",
                 "You were selected to book available dates."
             ),
-            background = WonCardBg,
-            borderColor = Green
+            container = MaterialTheme.colorScheme.primaryContainer,
+            content = MaterialTheme.colorScheme.onPrimaryContainer
         )
 
-        Spacer(Modifier.height(10.dp))
+        if (multipleCampsites) {
+            InfoCard(
+                heading = "Booking invitation",
+                lines = listOf(
+                    "Book by: $bookingDeadline",
+                    "Your invitation can be used at one of ${campsites.size} campsites. " +
+                        "Pick the one you want to book."
+                )
+            )
 
-        InfoCard(
-            heading = "Booking invitation",
-            lines = listOf(
-                "Booking deadline: $bookingDeadline",
-                "Tap to review the winning invitation."
-            ),
-            onClick = {
-                // TODO: navigate to winning invitation page
-                navController.navigate("invitation/${lotteryId}")
+            Text("Choose a campsite", style = MaterialTheme.typography.titleMedium)
+
+            campsites.forEach { campsite ->
+                InfoCard(
+                    heading = campsite.name,
+                    lines = listOf("Tap to see available dates and book here."),
+                    onClick = if (isDeclining) null else ({ onOpenInvitation(campsite.id) })
+                )
             }
-        )
+        } else {
+            InfoCard(
+                heading = "Booking invitation",
+                lines = listOfNotNull(
+                    campsites.singleOrNull()?.let { "Campsite: ${it.name}" },
+                    "Book by: $bookingDeadline",
+                    "Tap to see available dates and book your stay."
+                ),
+                onClick = if (isDeclining) null else ({ onOpenInvitation(campsites.singleOrNull()?.id) })
+            )
+        }
 
-        if (declineError) {
-            Spacer(Modifier.height(10.dp))
+        if (declineError != null) {
             Text(
-                "Couldn't decline the invitation. Please try again.",
-                color = Red,
-                fontSize = 12.sp
+                declineError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
             )
         }
     }
@@ -128,12 +131,12 @@ fun LotteryWonNotificationScreen(
     if (showDeclineDialog) {
         AlertDialog(
             onDismissRequest = { showDeclineDialog = false },
-            containerColor = CardBg,
-            titleContentColor = Color.White,
-            textContentColor = Grey,
-            title = { Text("Decline this invitation?", fontWeight = FontWeight.Bold) },
+            title = { Text("Decline this invitation?") },
             text = {
-                Text("You will give up your chance to book $lotteryName. This can't be undone.")
+                Text(
+                    "You will give up your chance to book $lotteryName and won't be able " +
+                        "to book with this invitation. This can't be undone."
+                )
             },
             confirmButton = {
                 TextButton(
@@ -142,12 +145,16 @@ fun LotteryWonNotificationScreen(
                         onDecline()
                     }
                 ) {
-                    Text("Decline", color = Red, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Decline",
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeclineDialog = false }) {
-                    Text("Keep invitation", color = Green)
+                    Text("Keep invitation")
                 }
             }
         )
@@ -158,27 +165,17 @@ fun LotteryWonNotificationScreen(
 // Lottery Lost Notification
 // ---------------------------------------------------------------------------
 
-/**
- * Screen shown when the user taps a "not selected" lottery notification.
- * The default parameter values are sample data matching the design mockup.
- */
+/** Shown when the entrant is NOT_SELECTED. */
 @Composable
 fun LotteryLostNotificationScreen(
-    lotteryName: String = "Cedar Ridge Autumn Lottery",
-    lotteryCode: String = "LOT-209",
-    roleLabel: String = "ENTRANT • US 01.03.02",
-    navController: NavController
+    lotteryName: String,
+    lotteryCode: String,
+    onBack: () -> Unit
 ) {
-    LotteryNotificationScaffold(
-        title = "Lottery Lost Notification",
-        roleLabel = roleLabel,
-        buttonText = "View lottery result",
-        onBack = {
-            navController.popBackStack()
-        },
-        onPrimaryAction = {
-            // TODO: navigate to lottery result page
-        }
+    LotteryNotificationLayout(
+        title = "Lottery Result",
+        primaryText = "Back to notifications",
+        onPrimaryAction = onBack
     ) {
         OutcomeCard(
             heading = "Not selected this time",
@@ -186,19 +183,117 @@ fun LotteryLostNotificationScreen(
                 "$lotteryName • $lotteryCode",
                 "You were not drawn for this lottery."
             ),
-            background = LostCardBg,
-            borderColor = Red
+            container = MaterialTheme.colorScheme.errorContainer,
+            content = MaterialTheme.colorScheme.onErrorContainer
         )
-
-        Spacer(Modifier.height(10.dp))
 
         InfoCard(
             heading = "Result details",
             lines = listOf(
-                "Your entered membership ended with this draw.",
-                "Review other open campsite lotteries."
+                "Your entry ended with this draw.",
+                "Explore other open campsite lotteries."
             )
         )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Booking confirmed / invitation used
+// ---------------------------------------------------------------------------
+
+/** Shown when the invitation is USED, with the reservation's details if available. */
+@Composable
+fun LotteryBookingConfirmedScreen(
+    lotteryName: String,
+    lotteryCode: String,
+    campsiteName: String?,
+    reservation: Reservation?,
+    onBack: () -> Unit
+) {
+    val cancelledOrRejected = reservation?.status == ReservationStatus.CANCELLED ||
+        reservation?.status == ReservationStatus.REJECTED
+    val heading = when (reservation?.status) {
+        ReservationStatus.CANCELLED -> "Reservation cancelled"
+        ReservationStatus.REJECTED -> "Reservation rejected"
+        else -> "You're booked!"
+    }
+
+    LotteryNotificationLayout(
+        title = "Invitation Used",
+        primaryText = "Back to notifications",
+        onPrimaryAction = onBack
+    ) {
+        OutcomeCard(
+            heading = heading,
+            lines = listOf(
+                "$lotteryName • $lotteryCode",
+                "Your winning invitation was used for this reservation."
+            ),
+            container = if (cancelledOrRejected) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.primaryContainer
+            },
+            content = if (cancelledOrRejected) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            }
+        )
+
+        InfoCard(
+            heading = "Reservation details",
+            lines = if (reservation == null) {
+                listOf("You already booked a reservation with this invitation.")
+            } else {
+                listOfNotNull(
+                    campsiteName?.let { "Campsite: $it" },
+                    reservation.checkInDate?.let { "Check-in: ${it.format(dateFormatter)}" },
+                    reservation.checkOutDate?.let { "Check-out: ${it.format(dateFormatter)}" },
+                    reservation.guestCount?.let { "Guests: $it" },
+                    reservation.statusChangeReason
+                        ?.takeIf { cancelledOrRejected }
+                        ?.let { "Reason: $it" },
+                    "Reservation ID: ${reservation.id}"
+                )
+            }
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Status message (deadline passed, declined, cancelled, withdrawn, waiting, errors)
+// ---------------------------------------------------------------------------
+
+@Composable
+fun LotteryStatusMessageScreen(
+    heading: String,
+    message: String,
+    onBack: () -> Unit,
+    lotteryName: String? = null,
+    lotteryCode: String? = null,
+    primaryText: String = "Back to notifications",
+    onPrimaryAction: () -> Unit = onBack
+) {
+    LotteryNotificationLayout(
+        title = "Lottery Notification",
+        primaryText = primaryText,
+        onPrimaryAction = onPrimaryAction
+    ) {
+        InfoCard(
+            heading = heading,
+            lines = listOfNotNull(
+                if (lotteryName != null && lotteryCode != null) "$lotteryName • $lotteryCode" else null,
+                message
+            )
+        )
+    }
+}
+
+@Composable
+fun LotteryLoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
     }
 }
 
@@ -207,88 +302,60 @@ fun LotteryLostNotificationScreen(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun LotteryNotificationScaffold(
+private fun LotteryNotificationLayout(
     title: String,
-    roleLabel: String,
-    buttonText: String,
-    onBack: () -> Unit,
+    primaryText: String,
     onPrimaryAction: () -> Unit,
-    secondaryButtonText: String? = null,
+    primaryEnabled: Boolean = true,
+    secondaryText: String? = null,
     onSecondaryAction: (() -> Unit)? = null,
-    content: @Composable () -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ScreenBg)
-            .statusBarsPadding()
+            .padding(16.dp)
     ) {
-        // Top bar
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) {
-                Text("‹", fontSize = 30.sp, color = Color.White)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                title,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-        }
+        Text(title, style = MaterialTheme.typography.headlineSmall)
 
-        Text(
-            roleLabel,
-            color = Green,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 14.dp)
-        )
+        Spacer(Modifier.height(16.dp))
 
-        Spacer(Modifier.height(32.dp))
-
-        // Cards
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 14.dp)
-        ) {
-            content()
-        }
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
 
-        // Primary button
+        Spacer(Modifier.height(12.dp))
+
         Button(
             onClick = onPrimaryAction,
+            enabled = primaryEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .height(54.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Green,
-                contentColor = Color.Black
-            )
+                .height(52.dp)
         ) {
-            Text(buttonText, fontWeight = FontWeight.Bold)
+            Text(primaryText)
         }
 
-        if (secondaryButtonText != null && onSecondaryAction != null) {
+        if (secondaryText != null && onSecondaryAction != null) {
+            Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = onSecondaryAction,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, end = 14.dp, bottom = 10.dp)
                     .height(48.dp),
-                border = BorderStroke(1.dp, Red),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Red)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
             ) {
-                Text(secondaryButtonText, fontWeight = FontWeight.Bold)
+                Text(secondaryText)
             }
         }
-
-        EntrantBottomBar(selected = "Entries")
     }
 }
 
@@ -296,21 +363,19 @@ private fun LotteryNotificationScaffold(
 private fun OutcomeCard(
     heading: String,
     lines: List<String>,
-    background: Color,
-    borderColor: Color
+    container: Color,
+    content: Color
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = background),
-        border = BorderStroke(1.dp, borderColor),
-        shape = RoundedCornerShape(11.dp)
+        colors = CardDefaults.cardColors(containerColor = container, contentColor = content)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(heading, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            lines.forEach { Text(it, color = Grey, fontSize = 12.sp) }
+            Text(heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
         }
     }
 }
@@ -325,96 +390,21 @@ private fun InfoCard(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
-        colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = BorderStroke(1.dp, CardBorder),
-        shape = RoundedCornerShape(11.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(heading, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            lines.forEach { Text(it, color = Grey, fontSize = 12.sp) }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Bottom navigation bar
-// ---------------------------------------------------------------------------
-
-private data class TabItem(val label: String, val icon: ImageVector)
-
-private val tabs = listOf(
-    TabItem("Explore", Icons.Outlined.Home),
-    TabItem("Entries", Icons.Outlined.Diamond),
-    TabItem("Bookings", Icons.Outlined.GridView),
-    TabItem("Profile", Icons.Outlined.Person)
-)
-
-@Composable
-private fun EntrantBottomBar(selected: String) {
-    Column(modifier = Modifier.background(ScreenBg)) {
-        HorizontalDivider(color = CardBorder, thickness = 1.dp)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(vertical = 8.dp)
-        ) {
-            tabs.forEach { tab ->
-                val color = if (tab.label == selected) Green else Grey
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            // TODO: navigate to ${tab.label} page
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Icon(tab.icon, contentDescription = tab.label, tint = color)
-                    Text(tab.label, color = color, fontSize = 10.sp)
-                }
+            Text(heading, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            lines.forEach {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Status message (shown when there is no won/lost screen for the entrant's status)
-// ---------------------------------------------------------------------------
-
-/**
- * Neutral screen for statuses that have no dedicated design, such as an
- * expired or already-used invitation, or a failed load.
- */
-@Composable
-fun LotteryStatusMessageScreen(
-    heading: String,
-    message: String,
-    lotteryName: String? = null,
-    lotteryCode: String? = null,
-    roleLabel: String = "ENTRANT",
-    navController: NavController
-) {
-    LotteryNotificationScaffold(
-        title = "Lottery Notification",
-        roleLabel = roleLabel,
-        buttonText = "Back to notifications",
-        onBack = {
-            navController.popBackStack()
-        },
-        onPrimaryAction = {
-            // TODO: navigate to notifications page
-        }
-    ) {
-        InfoCard(
-            heading = heading,
-            lines = listOfNotNull(
-                if (lotteryName != null && lotteryCode != null) "$lotteryName • $lotteryCode" else null,
-                message
-            )
-        )
     }
 }

@@ -24,6 +24,10 @@ import java.time.ZoneOffset
 object FirestorePaths {
     const val LOTTERIES = "lotteries"
     const val CAMPSITES = "campsites"
+    /**
+     * Subcollection inside each campsite document that holds its AvailabilityDay records:
+     * campsites/{campsiteId}/availability/{dayId}
+     */
     const val AVAILABILITY = "availability"
     const val RESERVATIONS = "reservations"
     const val PARTICIPATIONS = "lotteryParticipations"
@@ -119,9 +123,9 @@ class InvitationBookingRepository(
         val today = LocalDate.now(lottery.timeZone ?: ZoneId.systemDefault())
         val earliest = if (windowStart.isAfter(today)) windowStart else today
 
-        // Single-field filter => no composite index required. Date filtering is done here.
-        return db.collection(FirestorePaths.AVAILABILITY)
-            .whereEqualTo("campsiteId", campsiteId)
+        // Each campsite keeps its own nights in campsites/{campsiteId}/availability,
+        // so the whole subcollection is read and date filtering is done here.
+        return availabilityOf(campsiteId)
             .get().await()
             .documents
             .mapNotNull { doc ->
@@ -139,6 +143,12 @@ class InvitationBookingRepository(
             }
             .sortedBy { it.date }
     }
+
+    /** The availability subcollection of one campsite: campsites/{campsiteId}/availability. */
+    private fun availabilityOf(campsiteId: String) =
+        db.collection(FirestorePaths.CAMPSITES)
+            .document(campsiteId)
+            .collection(FirestorePaths.AVAILABILITY)
 
     // ---------------------------------------------------------------------
     // Booking
@@ -187,7 +197,7 @@ class InvitationBookingRepository(
         val lotteryRef = db.collection(FirestorePaths.LOTTERIES).document(details.lottery.id)
         val participationRef = db.collection(FirestorePaths.PARTICIPATIONS).document(details.participationDocId)
         val reservationRef = db.collection(FirestorePaths.RESERVATIONS).document() // auto ID
-        val nightRefs = sorted.map { db.collection(FirestorePaths.AVAILABILITY).document(it.docId) }
+        val nightRefs = sorted.map { availabilityOf(campsite.id).document(it.docId) }
 
         return db.runTransaction<String> { tx ->
             // ---- All reads must come before any writes ----
@@ -325,7 +335,9 @@ fun DocumentSnapshot.toParticipation() = LotteryParticipation(
 )
 
 private fun DocumentSnapshot.toAvailabilityDay() = AvailabilityDay(
-    campsiteId = getString("campsiteId").orEmpty(),
+    // Days live under their campsite, so fall back to the parent document's ID
+    // if the day itself doesn't store campsiteId.
+    campsiteId = (get("campsiteId") as? String) ?: reference.parent.parent?.id.orEmpty(),
     date = get("date").toLocalDateOrNull(),
     guestCapacity = getLong("guestCapacity")?.toInt(),
     bookedGuests = getLong("bookedGuests")?.toInt() ?: 0

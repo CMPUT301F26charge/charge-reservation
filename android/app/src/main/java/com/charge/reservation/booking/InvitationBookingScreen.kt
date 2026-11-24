@@ -69,15 +69,19 @@ private val deadlineFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a 
  * Stateful entry point. Navigate here when the user taps "Open invitation":
  *
  *     navController.navigate("invitation/$lotteryId")
+ *     navController.navigate("invitation/$lotteryId?campsiteId=$campsiteId") // campsite preselected
+ *
+ * @param initialCampsiteId campsite to start on when the lottery has several, or null for the first
  */
 @Composable
 fun InvitationBookingScreen(
     lotteryId: String,
     onBack: () -> Unit,
     onBooked: (reservationId: String) -> Unit,
+    initialCampsiteId: String? = null,
     viewModel: InvitationBookingViewModel = viewModel(
         key = "invitation-$lotteryId",
-        factory = InvitationBookingViewModel.factory(lotteryId)
+        factory = InvitationBookingViewModel.factory(lotteryId, initialCampsiteId)
     )
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -247,7 +251,12 @@ private fun BookingForm(
         if (details.campsites.size > 1) {
             item {
                 Column {
-                    Text("Campsite", style = MaterialTheme.typography.titleMedium)
+                    Text("Choose a campsite", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Your invitation can be used at any one of these campsites.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -260,6 +269,7 @@ private fun BookingForm(
                             )
                         }
                     }
+                    state.selectedCampsite?.let { CampsiteSummary(it) }
                 }
             }
         } else {
@@ -329,6 +339,24 @@ private fun BookingForm(
                 )
             }
         }
+    }
+}
+
+/** One line of key facts about the selected campsite, shown under the campsite picker. */
+@Composable
+private fun CampsiteSummary(campsite: com.charge.reservation.model.Campsite) {
+    val facts = listOfNotNull(
+        campsite.location.takeIf { it.isNotBlank() },
+        campsite.maxOccupancy?.let { "up to $it guests" },
+        campsite.pricePerNight?.let { "${NumberFormat.getCurrencyInstance().format(it)} per night" }
+    )
+    if (facts.isNotEmpty()) {
+        Text(
+            facts.joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 

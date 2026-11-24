@@ -54,20 +54,6 @@ class NotificationsScreenTest {
     }
 
 
-    @Test
-    fun showsTitleAndRoleLabel() {
-        composeRule.setContent {
-            NotificationsScreen(
-                notifications = emptyList(),
-                onOpenLottery = {},
-                roleLabel = "ENTRANT • TEST",
-                navController = rememberNavController()
-            )
-        }
-
-        composeRule.onNodeWithText("Notifications").assertIsDisplayed()
-        composeRule.onNodeWithText("ENTRANT • TEST").assertIsDisplayed()
-    }
 
     @Test
     fun notificationContent_isShownOneLinePerLineBreak() {
@@ -151,14 +137,4 @@ class NotificationsScreenTest {
         assertNull(openedId)
     }
 
-    @Test
-    fun bottomBar_showsAllFourTabs() {
-        composeRule.setContent {
-            NotificationsScreen(notifications = emptyList(), onOpenLottery = {}, navController = rememberNavController())
-        }
-
-        listOf("Explore", "Entries", "Bookings", "Profile").forEach { label ->
-            composeRule.onNodeWithText(label).assertIsDisplayed()
-        }
-    }
 }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.charge.reservation.model.Reservation
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -33,29 +34,33 @@ class LotteryNotificationScreensTest {
     // LotteryWonNotificationScreen
     // ------------------------------------------------------------------
 
+    private val testLake = CampsiteOption(id = "c1", name = "Test Lake")
+    private val testRidge = CampsiteOption(id = "c2", name = "Test Ridge")
+
     private fun showWon(
         onDecline: () -> Unit = {},
         isDeclining: Boolean = false,
-        declineError: Boolean = false
-    ) = show { nav ->
+        declineError: Boolean = false,
+        campsites: List<CampsiteOption> = listOf(testLake),
+        onOpenInvitation: (String?) -> Unit = {}
+    ) = show { _ ->
         LotteryWonNotificationScreen(
-            navController = nav,
-            lotteryId = "test-lottery",
             lotteryName = "Test Lake Lottery",
             lotteryCode = "LOT-999",
             bookingDeadline = "Nov 1, 2026",
+            campsites = campsites,
+            onOpenInvitation = onOpenInvitation,
             onDecline = onDecline,
             isDeclining = isDeclining,
-            declineError = declineError
+            declineError = if (declineError) "Couldn't decline the invitation. Please try again." else null
         )
     }
 
     @Test
-    fun won_showsTitleAndRoleLabel() {
+    fun won_showsTitle() {
         showWon()
 
-        composeRule.onNodeWithText("Lottery Won Notification").assertIsDisplayed()
-        composeRule.onNodeWithText("ENTRANT • US 01.03.01").assertIsDisplayed()
+        composeRule.onNodeWithText("Lottery Won").assertIsDisplayed()
     }
 
     @Test
@@ -72,17 +77,41 @@ class LotteryNotificationScreensTest {
         showWon()
 
         composeRule.onNodeWithText("Booking invitation").assertIsDisplayed()
-        composeRule.onNodeWithText("Booking deadline: Nov 1, 2026").assertIsDisplayed()
-        composeRule.onNodeWithText("Tap to review the winning invitation.").assertIsDisplayed()
+        composeRule.onNodeWithText("Campsite: Test Lake").assertIsDisplayed()
+        composeRule.onNodeWithText("Book by: Nov 1, 2026").assertIsDisplayed()
+        composeRule.onNodeWithText("Tap to see available dates and book your stay.").assertIsDisplayed()
     }
 
     @Test
     fun won_showsOpenAndDeclineButtons() {
         showWon()
 
-        composeRule.onNodeWithText("Open winning invitation").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Open invitation & book").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Decline invitation").assertIsDisplayed().assertHasClickAction()
     }
+
+    @Test
+    fun won_singleCampsite_openButtonPassesThatCampsite() {
+        var opened: String? = "not called"
+        showWon(onOpenInvitation = { opened = it })
+
+        composeRule.onNodeWithText("Open invitation & book").performClick()
+
+        assertEquals("c1", opened)
+        composeRule.onNodeWithText("Choose a campsite").assertDoesNotExist()
+    }
+
+
+    @Test
+    fun won_multipleCampsites_tappingCampsitePassesItsId() {
+        var opened: String? = "not called"
+        showWon(campsites = listOf(testLake, testRidge), onOpenInvitation = { opened = it })
+
+        composeRule.onNodeWithText("Test Ridge").performClick()
+
+        assertEquals("c2", opened)
+    }
+
 
     @Test
     fun won_bookingInvitationCard_isClickable() {
@@ -92,12 +121,13 @@ class LotteryNotificationScreensTest {
     }
 
     @Test
-    fun won_backArrowAndBottomTabs_areClickable() {
+    fun won_hasNoOwnBackArrowOrBottomTabs() {
         showWon()
 
-        composeRule.onNodeWithText("‹").assertIsDisplayed().assertHasClickAction()
+        // The app's Scaffold provides the back arrow and bottom tabs, so the screen draws neither.
+        composeRule.onNodeWithText("‹").assertDoesNotExist()
         tabLabels.forEach { label ->
-            composeRule.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+            composeRule.onNodeWithText(label).assertDoesNotExist()
         }
     }
 
@@ -180,20 +210,19 @@ class LotteryNotificationScreensTest {
     // LotteryLostNotificationScreen
     // ------------------------------------------------------------------
 
-    private fun showLost() = show { nav ->
+    private fun showLost(onBack: () -> Unit = {}) = show { _ ->
         LotteryLostNotificationScreen(
-            navController = nav,
             lotteryName = "Test Ridge Lottery",
-            lotteryCode = "LOT-123"
+            lotteryCode = "LOT-123",
+            onBack = onBack
         )
     }
 
     @Test
-    fun lost_showsTitleAndRoleLabel() {
+    fun lost_showsTitle() {
         showLost()
 
-        composeRule.onNodeWithText("Lottery Lost Notification").assertIsDisplayed()
-        composeRule.onNodeWithText("ENTRANT • US 01.03.02").assertIsDisplayed()
+        composeRule.onNodeWithText("Lottery Result").assertIsDisplayed()
     }
 
     @Test
@@ -210,15 +239,18 @@ class LotteryNotificationScreensTest {
         showLost()
 
         composeRule.onNodeWithText("Result details").assertIsDisplayed()
-        composeRule.onNodeWithText("Your entered membership ended with this draw.").assertIsDisplayed()
-        composeRule.onNodeWithText("Review other open campsite lotteries.").assertIsDisplayed()
+        composeRule.onNodeWithText("Your entry ended with this draw.").assertIsDisplayed()
+        composeRule.onNodeWithText("Explore other open campsite lotteries.").assertIsDisplayed()
     }
 
     @Test
-    fun lost_showsViewResultButton() {
-        showLost()
+    fun lost_backButton_callsOnBack() {
+        var backCalls = 0
+        showLost(onBack = { backCalls++ })
 
-        composeRule.onNodeWithText("View lottery result").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Back to notifications").assertIsDisplayed().performClick()
+
+        assertEquals(1, backCalls)
     }
 
     @Test
@@ -226,16 +258,17 @@ class LotteryNotificationScreensTest {
         showLost()
 
         composeRule.onNodeWithText("Decline invitation").assertDoesNotExist()
-        composeRule.onNodeWithText("Open winning invitation").assertDoesNotExist()
+        composeRule.onNodeWithText("Open invitation & book").assertDoesNotExist()
     }
 
     @Test
-    fun lost_backArrowAndBottomTabs_areClickable() {
+    fun lost_hasNoOwnBackArrowOrBottomTabs() {
         showLost()
 
-        composeRule.onNodeWithText("‹").assertIsDisplayed().assertHasClickAction()
+        // The app's Scaffold provides the back arrow and bottom tabs, so the screen draws neither.
+        composeRule.onNodeWithText("‹").assertDoesNotExist()
         tabLabels.forEach { label ->
-            composeRule.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+            composeRule.onNodeWithText(label).assertDoesNotExist()
         }
     }
 
@@ -245,9 +278,9 @@ class LotteryNotificationScreensTest {
 
     @Test
     fun status_showsTitleHeadingAndMessage() {
-        show { nav ->
+        show { _ ->
             LotteryStatusMessageScreen(
-                navController = nav,
+                onBack = {},
                 heading = "Invitation expired",
                 message = "The booking deadline for this lottery has passed."
             )
@@ -260,9 +293,9 @@ class LotteryNotificationScreensTest {
 
     @Test
     fun status_showsLotteryLine_whenNameAndCodeProvided() {
-        show { nav ->
+        show { _ ->
             LotteryStatusMessageScreen(
-                navController = nav,
+                onBack = {},
                 heading = "Invitation used",
                 message = "You already booked a reservation with this invitation.",
                 lotteryName = "Test Lake Lottery",
@@ -275,9 +308,9 @@ class LotteryNotificationScreensTest {
 
     @Test
     fun status_hidesLotteryLine_whenNameOrCodeMissing() {
-        show { nav ->
+        show { _ ->
             LotteryStatusMessageScreen(
-                navController = nav,
+                onBack = {},
                 heading = "Lottery not found",
                 message = "This lottery or your entry could not be found."
             )
@@ -288,9 +321,9 @@ class LotteryNotificationScreensTest {
 
     @Test
     fun status_showsBackButton_andNoWonOrLostButtons() {
-        show { nav ->
+        show { _ ->
             LotteryStatusMessageScreen(
-                navController = nav,
+                onBack = {},
                 heading = "Awaiting the draw",
                 message = "Not announced yet."
             )
@@ -298,23 +331,46 @@ class LotteryNotificationScreensTest {
 
         composeRule.onNodeWithText("Back to notifications").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Decline invitation").assertDoesNotExist()
-        composeRule.onNodeWithText("Open winning invitation").assertDoesNotExist()
-        composeRule.onNodeWithText("View lottery result").assertDoesNotExist()
+        composeRule.onNodeWithText("Open invitation & book").assertDoesNotExist()
     }
 
     @Test
-    fun status_backArrowAndBottomTabs_areClickable() {
-        show { nav ->
+    fun status_hasNoOwnBackArrowOrBottomTabs() {
+        show { _ ->
             LotteryStatusMessageScreen(
-                navController = nav,
+                onBack = {},
                 heading = "Awaiting the draw",
                 message = "Not announced yet."
             )
         }
 
-        composeRule.onNodeWithText("‹").assertIsDisplayed().assertHasClickAction()
+        // The app's Scaffold provides the back arrow and bottom tabs, so the screen draws neither.
+        composeRule.onNodeWithText("‹").assertDoesNotExist()
         tabLabels.forEach { label ->
-            composeRule.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+            composeRule.onNodeWithText(label).assertDoesNotExist()
         }
+    }
+
+    // ------------------------------------------------------------------
+    // LotteryBookingConfirmedScreen
+    // ------------------------------------------------------------------
+
+    @Test
+    fun confirmed_showsReservationDetails() {
+        show { _ ->
+            LotteryBookingConfirmedScreen(
+                lotteryName = "Test Lake Lottery",
+                lotteryCode = "LOT-999",
+                campsiteName = "Test Lake",
+                reservation = Reservation(id = "res-1", campsiteId = "c1", guestCount = 2),
+                onBack = {}
+            )
+        }
+
+        composeRule.onNodeWithText("Invitation Used").assertIsDisplayed()
+        composeRule.onNodeWithText("You're booked!").assertIsDisplayed()
+        composeRule.onNodeWithText("Campsite: Test Lake").assertIsDisplayed()
+        composeRule.onNodeWithText("Guests: 2").assertIsDisplayed()
+        composeRule.onNodeWithText("Reservation ID: res-1").assertIsDisplayed()
     }
 }
