@@ -18,6 +18,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/** A campsite a winner can choose to book at. */
+data class CampsiteOption(val id: String, val name: String)
+
 /** Everything the lottery notification screens need, already resolved. */
 data class LotteryNotificationData(
     val lotteryId: String,
@@ -29,7 +32,9 @@ data class LotteryNotificationData(
     /** The reservation made with this invitation, if it has been used. */
     val reservation: Reservation?,
     /** Name of the reserved campsite, if known. */
-    val reservationCampsiteName: String?
+    val reservationCampsiteName: String?,
+    /** The lottery's campsites that are still listed, in the lottery's order. */
+    val campsites: List<CampsiteOption>
 ) {
     fun deadlinePassed(now: Instant = Instant.now()): Boolean =
         bookingDeadline?.let { now.isAfter(it) } ?: false
@@ -57,11 +62,15 @@ class LotteryNotificationRepository(
         val lottery = lotterySnap.toLottery()
         val zone = lottery.timeZone ?: ZoneId.systemDefault()
 
-        val campsiteNames: Map<String, String> = lottery.campsiteIds.mapNotNull { id ->
+        val campsiteDocs = lottery.campsiteIds.mapNotNull { id ->
             db.collection(FirestorePaths.CAMPSITES).document(id).get().await()
                 .takeIf { it.exists() }
-                ?.let { id to (it.get("name") as? String).orEmpty() }
-        }.toMap()
+        }
+        val campsiteNames: Map<String, String> =
+            campsiteDocs.associate { it.id to (it.get("name") as? String).orEmpty() }
+        val bookableCampsites = campsiteDocs
+            .filter { it.get("removed") != true }
+            .map { CampsiteOption(it.id, (it.get("name") as? String).orEmpty().ifBlank { "Campsite" }) }
 
         val reservation = participation.reservationId
             ?.takeIf { it.isNotBlank() }
@@ -76,7 +85,7 @@ class LotteryNotificationRepository(
         }
         val lotteryName = when {
             firstName == null -> "Lottery"
-            lottery.campsiteIds.size > 1 -> "$firstName Lottery (+${lottery.campsiteIds.size - 1} more)"
+            lottery.campsiteIds.size > 1 -> "$firstName + ${lottery.campsiteIds.size - 1} more campsites"
             else -> "$firstName Lottery"
         }
 
@@ -97,7 +106,8 @@ class LotteryNotificationRepository(
             reservation = reservation,
             reservationCampsiteName = reservation?.campsiteId
                 ?.let { campsiteNames[it] }
-                ?.takeIf { it.isNotBlank() }
+                ?.takeIf { it.isNotBlank() },
+            campsites = bookableCampsites
         )
     }
 

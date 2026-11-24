@@ -48,23 +48,32 @@ private val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Loca
 // Lottery Won Notification
 // ---------------------------------------------------------------------------
 
-/** Shown when the entrant is INVITED and the booking deadline hasn't passed. */
+/**
+ * Shown when the entrant is INVITED and the booking deadline hasn't passed.
+ *
+ * If the lottery has several campsites, each is listed so the winner can pick
+ * the one to book at; [onOpenInvitation] receives the picked campsite's ID.
+ * With one campsite (or from the main button) it receives that campsite's ID or null.
+ */
 @Composable
 fun LotteryWonNotificationScreen(
     lotteryName: String,
     lotteryCode: String,
     bookingDeadline: String,
-    onOpenInvitation: () -> Unit,
+    campsites: List<CampsiteOption>,
+    onOpenInvitation: (campsiteId: String?) -> Unit,
     onDecline: () -> Unit,
     isDeclining: Boolean,
     declineError: String?
 ) {
     var showDeclineDialog by remember { mutableStateOf(false) }
 
+    val multipleCampsites = campsites.size > 1
+
     LotteryNotificationLayout(
         title = "Lottery Won",
         primaryText = "Open invitation & book",
-        onPrimaryAction = onOpenInvitation,
+        onPrimaryAction = { onOpenInvitation(campsites.singleOrNull()?.id) },
         primaryEnabled = !isDeclining,
         secondaryText = if (isDeclining) "Declining…" else "Decline invitation",
         onSecondaryAction = { if (!isDeclining) showDeclineDialog = true }
@@ -79,14 +88,36 @@ fun LotteryWonNotificationScreen(
             content = MaterialTheme.colorScheme.onPrimaryContainer
         )
 
-        InfoCard(
-            heading = "Booking invitation",
-            lines = listOf(
-                "Book by: $bookingDeadline",
-                "Tap to see available dates and book your stay."
-            ),
-            onClick = if (isDeclining) null else onOpenInvitation
-        )
+        if (multipleCampsites) {
+            InfoCard(
+                heading = "Booking invitation",
+                lines = listOf(
+                    "Book by: $bookingDeadline",
+                    "Your invitation can be used at one of ${campsites.size} campsites. " +
+                        "Pick the one you want to book."
+                )
+            )
+
+            Text("Choose a campsite", style = MaterialTheme.typography.titleMedium)
+
+            campsites.forEach { campsite ->
+                InfoCard(
+                    heading = campsite.name,
+                    lines = listOf("Tap to see available dates and book here."),
+                    onClick = if (isDeclining) null else ({ onOpenInvitation(campsite.id) })
+                )
+            }
+        } else {
+            InfoCard(
+                heading = "Booking invitation",
+                lines = listOfNotNull(
+                    campsites.singleOrNull()?.let { "Campsite: ${it.name}" },
+                    "Book by: $bookingDeadline",
+                    "Tap to see available dates and book your stay."
+                ),
+                onClick = if (isDeclining) null else ({ onOpenInvitation(campsites.singleOrNull()?.id) })
+            )
+        }
 
         if (declineError != null) {
             Text(

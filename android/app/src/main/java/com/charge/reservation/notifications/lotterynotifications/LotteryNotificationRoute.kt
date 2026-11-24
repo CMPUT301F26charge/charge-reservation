@@ -13,7 +13,8 @@ import com.charge.reservation.model.ParticipationStatus
 
 /**
  * Opened when the user taps "View lottery" on a notification. Always shows a screen:
- *  - INVITED, deadline not passed -> won screen ("Open invitation & book" or decline)
+ *  - INVITED, deadline not passed -> won screen: pick a campsite (if the lottery has
+ *                                    several) and book, or decline
  *  - NOT_SELECTED                 -> lost screen
  *  - USED                         -> booking confirmed, with the reservation's details
  *  - INVITED past deadline/EXPIRED -> "Booking deadline passed"
@@ -22,14 +23,15 @@ import com.charge.reservation.model.ParticipationStatus
  *
  * @param lotteryId the notification's lotteryId
  * @param entrantId the signed-in user's id (UserProfile.id, the Firebase Auth UID)
- * @param onOpenInvitation opens the booking flow (InvitationBookingScreen) for a lottery
+ * @param onOpenInvitation opens the booking flow (InvitationBookingScreen) for a lottery,
+ * with the campsite the winner picked, or null to let them choose there
  * @param onBack returns to the notification list
  */
 @Composable
 fun LotteryNotificationRoute(
     lotteryId: String,
     entrantId: String?,
-    onOpenInvitation: (lotteryId: String) -> Unit,
+    onOpenInvitation: (lotteryId: String, campsiteId: String?) -> Unit,
     onBack: () -> Unit,
     vm: LotteryNotificationViewModel = viewModel(key = "lottery-notification-$lotteryId")
 ) {
@@ -81,7 +83,7 @@ fun LotteryNotificationRoute(
             data = s.data,
             isDeclining = declining,
             declineError = declineError,
-            onOpenInvitation = { onOpenInvitation(lotteryId) },
+            onOpenInvitation = { campsiteId -> onOpenInvitation(lotteryId, campsiteId) },
             onDecline = vm::declineInvitation,
             onBack = onBack
         )
@@ -93,7 +95,7 @@ private fun LoadedLotteryNotification(
     data: LotteryNotificationData,
     isDeclining: Boolean,
     declineError: String?,
-    onOpenInvitation: () -> Unit,
+    onOpenInvitation: (campsiteId: String?) -> Unit,
     onDecline: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -105,6 +107,7 @@ private fun LoadedLotteryNotification(
                 lotteryName = data.lotteryName,
                 lotteryCode = data.lotteryCode,
                 bookingDeadline = data.deadlineText,
+                campsites = data.campsites,
                 onOpenInvitation = onOpenInvitation,
                 onDecline = onDecline,
                 isDeclining = isDeclining,
