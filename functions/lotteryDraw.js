@@ -91,8 +91,9 @@ async function drawClosedLottery(db, lotteryId) {
         // Only WAITING entrants can be selected.
         // The limit protects this single-transaction implementation
         // from exceeding Firestore's transaction write limits.
-        const waitingQuery = lotteryRef
-            .collection("participants")
+        const waitingQuery = db
+            .collection("lotteryParticipations")
+            .where("lotteryId", "==", lotteryId)
             .where("status", "==", "WAITING")
             .limit(451);
 
@@ -106,7 +107,7 @@ async function drawClosedLottery(db, lotteryId) {
         }
 
         const entrantIds = waitingSnap.docs.map(
-            (doc) => doc.id
+            (doc) => doc.get("entrantId")
         );
 
         const winners = selectWinners(
@@ -118,7 +119,9 @@ async function drawClosedLottery(db, lotteryId) {
 
         // No writes occur until all reads finish.
         for (const participantDoc of waitingSnap.docs) {
-            const selected = winnerSet.has(participantDoc.id);
+            const selected = winnerSet.has(
+                participantDoc.get("entrantId")
+            );
 
             transaction.update(
                 participantDoc.ref,
