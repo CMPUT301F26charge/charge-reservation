@@ -1,22 +1,24 @@
 package com.charge.reservation.booking
 
 import android.util.Log
+import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.tasks.await
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
+
 import com.charge.reservation.model.AvailabilityDay
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.Lottery
 import com.charge.reservation.model.LotteryParticipation
 import com.charge.reservation.model.ParticipationStatus
 import com.charge.reservation.model.ReservationStatus
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 /**
  * Collection names. ADJUST THESE to match your existing database.
@@ -117,11 +119,29 @@ class InvitationBookingRepository(
      * Nights that are full are still returned (remaining == 0) so the UI can show them
      * greyed out and make gaps in availability obvious.
      */
-    suspend fun loadNights(campsiteId: String, lottery: Lottery): List<NightOption> {
-        val windowStart = lottery.bookingStartDate ?: return emptyList()
-        val lastCheckOut = lottery.bookingEndDate ?: return emptyList()
+    suspend fun loadNights(campsiteId: String, lotteryId: String): List<NightOption> {
+        val lotterySnapshot = db.collection(FirestorePaths.LOTTERIES)
+            .document(lotteryId)
+            .get(Source.SERVER)
+            .await()
+
+        if (!lotterySnapshot.exists()) {
+            throw BookingException("This lottery no longer exists.")
+        }
+
+        val lottery = lotterySnapshot.toLottery()
+        if (campsiteId !in lottery.campsiteIds) {
+            throw BookingException("This campsite is no longer part of your invitation.")
+        }
+
+        val windowStart = lottery.bookingStartDate
+        val lastCheckOut = lottery.bookingEndDate
+        if (windowStart == null || lastCheckOut == null || !lastCheckOut.isAfter(windowStart)) {
+            throw BookingException("This lottery doesn't have a valid booking period.")
+        }
+
         val today = LocalDate.now(lottery.timeZone ?: ZoneId.systemDefault())
-        val earliest = if (windowStart.isAfter(today)) windowStart else today
+        val earliest = maxOf(windowStart, today)
 
         // Each campsite keeps its own nights in campsites/{campsiteId}/availability,
         // so the whole subcollection is read and date filtering is done here.
@@ -184,12 +204,6 @@ class InvitationBookingRepository(
             throw BookingException("Selected nights must be consecutive.")
         }
         if (guestCount < 1) throw BookingException("Add at least one guest.")
-        campsite.maxOccupancy?.let {
-            if (guestCount > it) throw BookingException("This campsite allows up to $it guests.")
-        }
-        if (campsite.id !in details.lottery.campsiteIds) {
-            throw BookingException("This campsite isn't part of your invitation.")
-        }
 
         val checkIn = sorted.first().date
         val checkOut = sorted.last().date.plusDays(1)
@@ -203,6 +217,7 @@ class InvitationBookingRepository(
             // ---- All reads must come before any writes ----
             val participation = tx.get(participationRef).toParticipation()
             if (participation.entrantId != uid ||
+                participation.lotteryId != lotteryRef.id ||
                 participation.status != ParticipationStatus.INVITED ||
                 participation.reservationId != null
             ) {
@@ -210,21 +225,69 @@ class InvitationBookingRepository(
             }
 
             val lotterySnap = tx.get(lotteryRef)
-            if (!lotterySnap.exists()) throw BookingException("This lottery no longer exists.")
-            lotterySnap.toLottery().bookingDeadline?.let {
-                if (Instant.now().isAfter(it)) {
-                    throw BookingException("The booking deadline for this invitation has passed.")
-                }
+            if (!lotterySnap.exists()) {
+                throw BookingException("This lottery no longer exists.")
+            }
+
+            val currentLottery = lotterySnap.toLottery()
+            val now = Instant.now()
+            val deadline = currentLottery.bookingDeadline
+            if (deadline != null && now.isAfter(deadline)) {
+                throw BookingException("The booking deadline for this invitation has passed.")
+            }
+
+            val windowStart = currentLottery.bookingStartDate
+            val windowEnd = currentLottery.bookingEndDate
+            if (windowStart == null || windowEnd == null || !windowEnd.isAfter(windowStart)) {
+                throw BookingException("This lottery doesn't have a valid booking period.")
+            }
+
+            val zone = currentLottery.timeZone ?: ZoneId.systemDefault()
+            val today = now.atZone(zone).toLocalDate()
+            if (checkIn.isBefore(today)) {
+                throw BookingException("The selected check-in date has already passed.")
+            }
+
+            if (checkIn.isBefore(windowStart) || checkOut.isAfter(windowEnd)) {
+                throw BookingException(
+                    "Choose a stay starting on or after $windowStart " +
+                            "with checkout by $windowEnd."
+                )
+            }
+
+            if (campsite.id !in currentLottery.campsiteIds) {
+                throw BookingException("This campsite is no longer part of your invitation.")
+            }
+
+            val campsiteSnap = tx.get(
+                db.collection(FirestorePaths.CAMPSITES).document(campsite.id)
+            )
+            if (!campsiteSnap.exists() || campsiteSnap.getBoolean("removed") == true) {
+                throw BookingException("This campsite is no longer available.")
+            }
+
+            val maxOccupancy = campsiteSnap.getLong("maxOccupancy")
+            if (maxOccupancy != null && guestCount.toLong() > maxOccupancy) {
+                throw BookingException("This campsite allows up to $maxOccupancy guests.")
             }
 
             val nightSnaps = nightRefs.map { tx.get(it) }
-            nightSnaps.forEachIndexed { i, snap ->
+            nightSnaps.forEachIndexed { index, snap ->
+                val requestedDate = sorted[index].date
+                if (!snap.exists()) {
+                    throw BookingException("$requestedDate is no longer available.")
+                }
+
                 val day = snap.toAvailabilityDay()
                 val capacity = day.guestCapacity
-                if (!snap.exists() || capacity == null || capacity - day.bookedGuests < guestCount) {
+                if (day.date != requestedDate ||
+                    day.campsiteId != campsite.id ||
+                    capacity == null ||
+                    day.bookedGuests !in 0..capacity ||
+                    capacity - day.bookedGuests < guestCount
+                ) {
                     throw BookingException(
-                        "${sorted[i].date} no longer has room for $guestCount guests. " +
-                                "Availability has been refreshed."
+                        "$requestedDate no longer has room for $guestCount guests."
                     )
                 }
             }
@@ -234,19 +297,19 @@ class InvitationBookingRepository(
                 tx.update(ref, "bookedGuests", FieldValue.increment(guestCount.toLong()))
             }
 
-            val now = Timestamp.now()
+            val bookingTimestamp = Timestamp.now()
             tx.set(
                 reservationRef,
                 mapOf(
                     "campsiteId" to campsite.id,
                     "lotteryId" to details.lottery.id,
                     "entrantId" to uid,
-                    "createdAt" to now,
+                    "createdAt" to bookingTimestamp,
                     "checkInDate" to checkIn.toString(),   // ISO yyyy-MM-dd
                     "checkOutDate" to checkOut.toString(),
                     "guestCount" to guestCount.toLong(),
                     "status" to ReservationStatus.CONFIRMED.name,
-                    "statusChangedAt" to now,
+                    "statusChangedAt" to bookingTimestamp,
                     "statusChangeReason" to null
                 )
             )
