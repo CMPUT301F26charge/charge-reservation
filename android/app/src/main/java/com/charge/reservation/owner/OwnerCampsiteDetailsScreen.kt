@@ -57,6 +57,8 @@ fun OwnerCampsiteDetailsScreen(
     lotteriesError: String,
     onRetryLotteries: () -> Unit,
     onRetryAvailability: () -> Unit,
+    onViewBookedDatesClick: () -> Unit,
+    onViewEntrantsClick: (String) -> Unit,
     onCreateLotteryClick: () -> Unit
 ) {
     var now by remember(campsite?.id) {
@@ -87,6 +89,15 @@ fun OwnerCampsiteDetailsScreen(
             return@Column
         }
 
+        Text(
+            text = campsite.name,
+            fontSize = 24.sp
+        )
+
+        Button(onClick = onViewBookedDatesClick) {
+            Text("View booked dates")
+        }
+
         if (isLoadingAvailability) {
             Text("Loading campsite details...")
             return@Column
@@ -101,11 +112,6 @@ fun OwnerCampsiteDetailsScreen(
 
             return@Column
         }
-
-        Text(
-            text = campsite.name,
-            fontSize = 24.sp
-        )
 
         Button(onClick = onCreateLotteryClick) {
             Text("Create lottery")
@@ -284,6 +290,10 @@ fun OwnerCampsiteDetailsScreen(
                             )
 
                             Text("Number of winners: ${lottery.winnerCount}")
+
+                            Button(onClick = { onViewEntrantsClick(lottery.id) }) {
+                                Text("View entrants")
+                            }
                         }
                     }
                 }

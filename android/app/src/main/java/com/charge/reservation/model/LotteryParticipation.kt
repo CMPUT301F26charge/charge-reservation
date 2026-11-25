@@ -20,5 +20,6 @@ data class LotteryParticipation (
     val entrantId: String = "",
     val joinedAt: Instant? = null,
     val status: ParticipationStatus = ParticipationStatus.WAITING,
-    val reservationId: String? = null
+    val reservationId: String? = null,
+    val entrantDisplayName: String? = null
 )

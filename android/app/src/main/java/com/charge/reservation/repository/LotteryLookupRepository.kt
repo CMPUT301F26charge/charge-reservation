@@ -1,9 +1,13 @@
 package com.charge.reservation.repository
 
+import java.time.Instant
+import kotlinx.coroutines.tasks.await
+
 import com.charge.reservation.model.Lottery
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Source
-import java.time.Instant
+import com.google.firebase.firestore.ListenerRegistration
+import com.charge.reservation.booking.FirestorePaths
+import com.charge.reservation.booking.toLottery
 
 data class FoundLottery(
     val lottery: Lottery,
@@ -14,17 +18,49 @@ class LotteryLookupRepository {
 
     private val db = FirebaseFirestore.getInstance()
 
-    fun getForCampsite(
+    suspend fun getLotteryTitle(lotteryId: String): String? {
+        val lottery = db.collection(FirestorePaths.LOTTERIES)
+            .document(lotteryId)
+            .get()
+            .await()
+            .toLottery()
+
+        for (campsiteId in lottery.campsiteIds) {
+            val campsite = db.collection(FirestorePaths.CAMPSITES)
+                .document(campsiteId)
+                .get()
+                .await()
+
+            val name = campsite.getString("name")
+                ?.takeIf { it.isNotBlank() } ?: continue
+            val otherCampsites = lottery.campsiteIds.size - 1
+
+            return if (otherCampsites > 0) {
+                "$name + $otherCampsites more"
+            } else {
+                name
+            }
+        }
+
+        return null
+    }
+
+    fun listenToCampsiteLottery(
         campsiteId: String,
         onSuccess: (FoundLottery?) -> Unit,
         onFailure: (Exception) -> Unit
-    ) {
-        db.collection("lotteries")
+    ): ListenerRegistration {
+        return db.collection("lotteries")
             .whereArrayContains("campsiteIds", campsiteId)
-            .get(Source.SERVER)
-            .addOnSuccessListener { result ->
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    onFailure(error)
+                    return@addSnapshotListener
+                }
+
+                val documents = snapshot?.documents ?: return@addSnapshotListener
                 try {
-                    val lotteries = result.documents.map { doc ->
+                    val lotteries = documents.map { doc ->
                         val lottery = Lottery(
                             id = doc.id,
                             ownerId = doc.getString("ownerId") ?: "",
@@ -69,9 +105,6 @@ class LotteryLookupRepository {
                 } catch (e: Exception) {
                     onFailure(e)
                 }
-            }
-            .addOnFailureListener { error ->
-                onFailure(error)
             }
     }
 }

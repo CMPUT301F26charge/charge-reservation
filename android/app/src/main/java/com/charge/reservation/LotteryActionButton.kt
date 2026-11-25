@@ -15,14 +15,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import java.time.Instant
+import kotlinx.coroutines.delay
+
 import com.charge.reservation.model.Lottery
 import com.charge.reservation.model.LotteryParticipation
 import com.charge.reservation.model.ParticipationStatus
 import com.charge.reservation.LotteryActionException
 import com.charge.reservation.LotteryParticipationRepository
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
-import java.time.Instant
 
 private const val TAG = "LotteryAction"
 
@@ -97,6 +99,7 @@ class LotteryActionState(
     val isWorking: Boolean,
     /** Empty when there is no error. */
     val error: String,
+    val now: Instant,
     /** Waitlist count including this user's join/leave from this session. */
     val waitlistCount: Int,
     val onClick: () -> Unit
@@ -122,7 +125,16 @@ fun rememberLotteryAction(
     var isLoading by remember(lotteryId, entrantId) { mutableStateOf(lotteryId != null) }
     var isUpdating by remember(lotteryId, entrantId) { mutableStateOf(false) }
     var error by remember(lotteryId, entrantId) { mutableStateOf("") }
-    var countAdjust by remember(lotteryId, entrantId) { mutableStateOf(0) }
+    var now by remember(lotteryId) { mutableStateOf(Instant.now()) }
+
+    LaunchedEffect(lotteryId) {
+        if (lotteryId == null) return@LaunchedEffect
+
+        while (true) {
+            now = Instant.now()
+            delay(1_000L)
+        }
+    }
 
     LaunchedEffect(lotteryId, entrantId) {
         if (lotteryId == null) {
@@ -141,9 +153,7 @@ fun rememberLotteryAction(
         isLoading = false
     }
 
-    val shownCount = waitlistCount + countAdjust
-    val buttonState = lotteryButtonState(lottery, participation, shownCount)
-
+    val buttonState = lotteryButtonState(lottery, participation, waitlistCount, now)
     val onClick: () -> Unit = click@{
         if (lottery == null || isLoading || isUpdating) return@click
         val action = buttonState
@@ -155,10 +165,8 @@ fun rememberLotteryAction(
             try {
                 if (action == LotteryButtonState.JOIN) {
                     repository.join(lottery.id, entrantId)
-                    countAdjust += 1
                 } else {
                     repository.leave(lottery.id, entrantId)
-                    countAdjust -= 1
                 }
                 participation = repository.getMine(lottery.id, entrantId)
             } catch (e: CancellationException) {
@@ -182,8 +190,9 @@ fun rememberLotteryAction(
         buttonState = buttonState,
         isWorking = isLoading || isUpdating,
         error = error,
-        waitlistCount = shownCount,
-        onClick = onClick
+        waitlistCount = waitlistCount,
+        onClick = onClick,
+        now = now
     )
 }
 

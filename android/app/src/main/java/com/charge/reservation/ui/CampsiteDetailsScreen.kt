@@ -17,18 +17,19 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.charge.reservation.model.Campsite
 import java.util.Locale
 import coil3.compose.AsyncImage
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import com.charge.reservation.model.Lottery
-import com.charge.reservation.model.AvailabilityDay
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
 import com.charge.reservation.LotteryButtonState
+import com.charge.reservation.model.Campsite
+import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.AvailabilityDay
 
 /**
  * Shows campsite details, availability, policies, and the lottery entry button.
@@ -36,9 +37,10 @@ import com.charge.reservation.LotteryButtonState
  * @param onBack returns to campsite browsing
  * @param lottery associated lottery, if available
  * @param waitlistCount current number of waitlisted entrants
- * @param lotteryButtonState current join/leave button state
+ * @param lotteryButtonState controls the join or leave action.
  * @param isLotteryActionWorking whether a lottery action is running
  * @param lotteryActionError error displayed after a failed action
+ * @param now device time shared with the join button to display registration status
  * @param onLotteryAction called when the join/leave button is selected
  */
 @Composable
@@ -53,12 +55,12 @@ fun CampsiteDetailsScreen(
     availabilityDays: List<AvailabilityDay> = emptyList(),
     isLoadingAvailability: Boolean = true,
     availabilityError: String = "",
+    now: Instant = Instant.now(),
     onLotteryAction: () -> Unit = {}
 ) {
     val green = Color(0xFF087F5B)
     val grey = Color(0xFF666666)
     val uriHandler = LocalUriHandler.current
-    val now = Instant.now()
 
     val registrationOpen = lottery?.registrationStartAt?.let { start ->
         lottery.registrationEndAt?.let { end ->
@@ -366,6 +368,14 @@ fun CampsiteDetailsScreen(
             } else {
                 Text(lotteryButtonState.label, fontWeight = FontWeight.Bold)
             }
+        }
+
+        if (lotteryButtonState == LotteryButtonState.LEAVE) {
+            Text(
+                text = "You're on the waitlist.",
+                color = green,
+                fontSize = 12.sp
+            )
         }
 
         if (lotteryActionError.isNotEmpty()) {
