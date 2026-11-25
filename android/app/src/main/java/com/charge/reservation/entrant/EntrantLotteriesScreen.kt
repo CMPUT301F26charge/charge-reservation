@@ -31,6 +31,15 @@ import com.charge.reservation.repository.LotteryLookupRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+/**
+ * Displays the entrant's lottery entries and their current statuses.
+ * The list updates as entries change. Each entry shows the campsite name
+ * when available and uses the lottery code as a fallback.
+ * Entrants can leave a waitlist while their entry is waiting for the draw.
+ *
+ * @param entrantId the Firebase Authentication UID of the signed-in entrant.
+ * @param onOpenLottery receives the lottery ID when the entrant taps an entry.
+ */
 @Composable
 fun EntrantLotteriesScreen(
     entrantId: String,

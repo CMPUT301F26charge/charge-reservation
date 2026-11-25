@@ -21,9 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 
 /**
- * Collects initial profile details.
+ * Collects the user's initial profile details. The form requires
+ * a nonblank name and a valid email address before submitting.
  *
- * Passes name, email, and phone number to onCreateProfile.
+ * @param onCreateProfile receives the trimmed name, email address, and
+ * phone number, in that order, after validation succeeds.
  */
 @Composable
 fun CreateProfileScreen(
