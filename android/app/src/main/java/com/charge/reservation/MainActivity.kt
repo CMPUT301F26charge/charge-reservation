@@ -120,8 +120,23 @@ class MainActivity : ComponentActivity() {
                                 AppNavigation(
                                     profile = state.profile,
                                     onProfileUpdated = { updatedProfile ->
-                                        appLaunchState =
-                                            AppLaunchState.ProfileReady(updatedProfile)
+                                        val current = appLaunchState as? AppLaunchState.ProfileReady
+                                        if (current != null && current.profile.id == updatedProfile.id) {
+                                            appLaunchState = AppLaunchState.ProfileReady(
+                                                updatedProfile.copy(
+                                                    notificationEnabled =
+                                                        current.profile.notificationEnabled
+                                                )
+                                            )
+                                        }
+                                    },
+                                    onNotificationPreferenceUpdated = { userId, enabled ->
+                                        val current = appLaunchState as? AppLaunchState.ProfileReady
+                                        if (current != null && current.profile.id == userId) {
+                                            appLaunchState = AppLaunchState.ProfileReady(
+                                                current.profile.copy(notificationEnabled = enabled)
+                                            )
+                                        }
                                     }
                                 )
                             }

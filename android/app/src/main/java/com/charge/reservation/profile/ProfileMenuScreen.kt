@@ -17,7 +17,8 @@ fun ProfileMenuScreen(
     onPersonalInfoClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onMessagesClick: () -> Unit,
-    onPoliciesClick: () -> Unit
+    onPoliciesClick: () -> Unit,
+    onNotificationSettingsClick: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -42,6 +43,15 @@ fun ProfileMenuScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Notifications")
+        }
+
+        if (onNotificationSettingsClick != null) {
+            OutlinedButton(
+                onClick = onNotificationSettingsClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Notification settings")
+            }
         }
 
         OutlinedButton(

@@ -131,6 +131,37 @@ class UserProfileRepository {
         }
     }
 
+    fun updateNotificationPreference(
+        userId: String,
+        enabled: Boolean,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (userId.isBlank()) {
+            onFailure(IllegalArgumentException("User ID cannot be blank."))
+            return
+        }
+
+        val profileReference = firestore.collection("users").document(userId)
+
+        firestore.runTransaction { transaction ->
+            val profile = transaction.get(profileReference)
+
+            if (!profile.exists() ||
+                profile.getBoolean("removed") == true ||
+                profile.getBoolean("isEntrant") == false
+            ) {
+                throw IllegalStateException("This profile cannot change notification settings.")
+            }
+
+            transaction.update(profileReference, "notificationEnabled", enabled)
+            Unit
+        }
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { exception -> onFailure(exception) }
+    }
+
+
     /**
      * Updates a user's personal information in Firestore.
      *
