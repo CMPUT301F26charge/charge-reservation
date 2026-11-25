@@ -33,8 +33,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.res.painterResource
-import com.charge.reservation.reservation.BookingsScreen
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 
+import com.charge.reservation.reservation.BookingsScreen
 import com.charge.reservation.owner.OwnerCampsiteDetailsScreen
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.owner.OwnerCampsiteListScreen
@@ -52,14 +54,12 @@ import com.charge.reservation.repository.FoundLottery
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.repository.LotteryRepository
 import com.charge.reservation.model.Lottery
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
+import com.charge.reservation.owner.OwnerBookedDatesScreen
 import com.charge.reservation.booking.InvitationBookingScreen
 import com.charge.reservation.notifications.lotterynotifications.LotteryNotificationRoute
 import com.charge.reservation.entrant.EntrantLotteriesScreen
 import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
-
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -77,6 +77,7 @@ fun AppNavigation(
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
+        "ownerBookedDates/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}",
         "lotteryNotification/{lotteryId}",
@@ -832,6 +833,13 @@ fun AppNavigation(
                             lotteriesError = lotteriesError,
                             onRetryLotteries = { lotteriesRetry++ },
                             onRetryAvailability = { availabilityRetry++ },
+                            onViewBookedDatesClick = {
+                                campsite?.let {
+                                    navController.navigate(
+                                        "ownerBookedDates/${Uri.encode(it.id)}"
+                                    )
+                                }
+                            },
                             onCreateLotteryClick = {
                                 if (campsite != null) {
                                     navController.navigate(
@@ -841,6 +849,42 @@ fun AppNavigation(
                             }
                         )
                     }
+                }
+            }
+
+            composable(
+                route = "ownerBookedDates/{campsiteId}",
+                arguments = listOf(
+                    navArgument("campsiteId") { type = NavType.StringType }
+                )
+            ) { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId")
+                val campsite = ownerCampsites.firstOrNull {
+                    it.id == campsiteId && it.ownerId == profile.id && !it.removed
+                }
+
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can view booked dates.")
+                    }
+
+                    isLoadingOwnerCampsites -> CircularProgressIndicator()
+
+                    ownerCampsitesError.isNotEmpty() -> {
+                        Column {
+                            Text(ownerCampsitesError)
+                            Button(onClick = { ownerListRetry++ }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+
+                    campsite == null -> Text("Campsite not found.")
+
+                    else -> OwnerBookedDatesScreen(
+                        campsiteId = campsite.id,
+                        campsiteName = campsite.name
+                    )
                 }
             }
 

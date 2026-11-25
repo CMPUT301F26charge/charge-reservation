@@ -50,6 +50,7 @@ fun AppBottomBar(
     // These screens belong to the owner's Campsites tab.
     val selectedRoute = when (currentRoute) {
         "ownerCampsiteDetails/{campsiteId}",
+        "ownerBookedDates/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}" -> "ownerCampsites"
 

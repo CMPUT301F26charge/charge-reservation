@@ -1,14 +1,16 @@
 
 package com.charge.reservation.repository
 
-import com.charge.reservation.model.Reservation
-import com.charge.reservation.model.ReservationStatus
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import com.google.firebase.firestore.Query
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+
+import com.charge.reservation.model.Reservation
+import com.charge.reservation.model.ReservationStatus
 
 /**
  * Reads reservation records belonging to the signed-in entrant.
@@ -35,9 +37,34 @@ class ReservationRepository {
             "Entrant ID cannot be blank."
         }
 
-        return firestore.collection("reservations")
+        val query = firestore.collection("reservations")
             .whereEqualTo("entrantId", entrantId)
-            .addSnapshotListener { snapshot, error ->
+
+        return listenToReservations(query, onSuccess, onFailure)
+    }
+
+    fun listenToConfirmedCampsiteReservations(
+        campsiteId: String,
+        onSuccess: (List<Reservation>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ): ListenerRegistration {
+        require(campsiteId.isNotBlank()) {
+            "Campsite ID cannot be blank."
+        }
+
+        val query = firestore.collection("reservations")
+            .whereEqualTo("campsiteId", campsiteId)
+            .whereEqualTo("status", ReservationStatus.CONFIRMED.name)
+
+        return listenToReservations(query, onSuccess, onFailure)
+    }
+
+    private fun listenToReservations(
+        query: Query,
+        onSuccess: (List<Reservation>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ): ListenerRegistration {
+        return query.addSnapshotListener { snapshot, error ->
 
                 if (error != null) {
                     onFailure(error)

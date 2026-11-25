@@ -61,7 +61,6 @@ fun CampsiteDetailsScreen(
     val green = Color(0xFF087F5B)
     val grey = Color(0xFF666666)
     val uriHandler = LocalUriHandler.current
-    val now = Instant.now()
 
     val registrationOpen = lottery?.registrationStartAt?.let { start ->
         lottery.registrationEndAt?.let { end ->
