@@ -312,19 +312,40 @@ fun CampsiteDetailsScreen(
         if (lottery == null) {
             Text("No lottery available for this campsite.", color = grey)
         } else {
-            val dateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a")
+            val dateTimeFormat = DateTimeFormatter
+                .ofPattern("MMM d, yyyy h:mm a z", Locale.getDefault())
                 .withZone(lottery.timeZone ?: ZoneId.systemDefault())
 
+            val bookingDateFormat =
+                DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
+
             Text(
-                "Registration opens: " + (lottery.registrationStartAt?.let {
-                    dateFormat.format(it)
-                } ?: "Not set"),
+                text = "Registration opens: " +
+                        (lottery.registrationStartAt?.let(dateTimeFormat::format) ?: "Not set"),
                 color = grey
             )
+
             Text(
-                "Registration closes: " + (lottery.registrationEndAt?.let {
-                    dateFormat.format(it)
-                } ?: "Not set"),
+                text = "Registration closes: " +
+                        (lottery.registrationEndAt?.let(dateTimeFormat::format) ?: "Not set"),
+                color = grey
+            )
+
+            Text(
+                text = "Earliest check-in: " +
+                        (lottery.bookingStartDate?.format(bookingDateFormat) ?: "Not set"),
+                color = grey
+            )
+
+            Text(
+                text = "Latest check-out: " +
+                        (lottery.bookingEndDate?.format(bookingDateFormat) ?: "Not set"),
+                color = grey
+            )
+
+            Text(
+                text = "Booking deadline: " +
+                        (lottery.bookingDeadline?.let(dateTimeFormat::format) ?: "Not set"),
                 color = grey
             )
             Text(
