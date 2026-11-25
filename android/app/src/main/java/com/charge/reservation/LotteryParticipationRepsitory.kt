@@ -41,42 +41,75 @@ class LotteryParticipationRepository(
      * count queries, so two people joining the last spot at the same moment could both get in.
      * Enforce it strictly with a Cloud Function or a counter field if that matters.
      */
+
     suspend fun join(lotteryId: String, entrantId: String) {
-        val lotteryRef = db.collection(FirestorePaths.LOTTERIES).document(lotteryId)
+        val lotteryRef = db.collection(FirestorePaths.LOTTERIES)
+            .document(lotteryId)
         val ref = participationRef(lotteryId, entrantId)
 
-        val lotterySnap = lotteryRef.get().await()
-        if (!lotterySnap.exists()) throw LotteryActionException("This lottery no longer exists.")
-        lotterySnap.toLottery().waitlistCapacity?.let { capacity ->
-            val waiting = db.collection(FirestorePaths.PARTICIPATIONS)
-                .whereEqualTo("lotteryId", lotteryId)
-                .whereEqualTo("status", ParticipationStatus.WAITING.name)
-                .count()
-                .get(AggregateSource.SERVER)
-                .await()
-                .count
-            if (waiting >= capacity) throw LotteryActionException("This lottery's waitlist is full.")
-        }
-
         db.runTransaction<Any?> { tx ->
-            val lottery = tx.get(lotteryRef).also {
-                if (!it.exists()) throw LotteryActionException("This lottery no longer exists.")
-            }.toLottery()
+            // Read both documents before making any writes.
+            val lotterySnap = tx.get(lotteryRef)
+            val existing = tx.get(ref)
 
-            val now = Instant.now()
-            val start = lottery.registrationStartAt
-            val end = lottery.registrationEndAt
-            if (lottery.drawCompletedAt != null ||
-                start == null || end == null ||
-                now.isBefore(start) || !now.isBefore(end)
-            ) {
-                throw LotteryActionException("Registration for this lottery isn't open.")
+            if (!lotterySnap.exists()) {
+                throw LotteryActionException("This lottery no longer exists.")
             }
 
-            val existing = tx.get(ref)
-            val status = if (existing.exists()) existing.toParticipation().status else null
-            when (status) {
-                null -> tx.set(
+            val lottery = lotterySnap.toLottery()
+            val now = Instant.now()
+
+            if (
+                lottery.drawCompletedAt != null ||
+                lottery.registrationStartAt == null ||
+                lottery.registrationEndAt == null ||
+                now.isBefore(lottery.registrationStartAt) ||
+                !now.isBefore(lottery.registrationEndAt)
+            ) {
+                throw LotteryActionException(
+                    "Registration for this lottery isn't open."
+                )
+            }
+
+            val status = if (existing.exists()) {
+                existing.toParticipation().status
+            } else {
+                null
+            }
+
+            if (status == ParticipationStatus.WAITING) {
+                return@runTransaction null
+            }
+
+            if (status != null && status != ParticipationStatus.WITHDRAWN) {
+                throw LotteryActionException(
+                    "You can't rejoin this lottery."
+                )
+            }
+
+            val count = lotterySnap.getLong("waitlistCount")
+                ?: throw LotteryActionException(
+                    "Lottery waitlist count is not initialized."
+                )
+
+            val capacity = lottery.waitlistCapacity
+
+            if (capacity != null && count >= capacity.toLong()) {
+                throw LotteryActionException(
+                    "This lottery's waitlist is full."
+                )
+            }
+
+            if (status == ParticipationStatus.WITHDRAWN) {
+                tx.update(
+                    ref,
+                    mapOf(
+                        "status" to ParticipationStatus.WAITING.name,
+                        "joinedAt" to Timestamp.now()
+                    )
+                )
+            } else {
+                tx.set(
                     ref,
                     mapOf(
                         "lotteryId" to lotteryId,
@@ -86,37 +119,68 @@ class LotteryParticipationRepository(
                         "reservationId" to null
                     )
                 )
-                ParticipationStatus.WITHDRAWN -> tx.update(
-                    ref,
-                    mapOf(
-                        "status" to ParticipationStatus.WAITING.name,
-                        "joinedAt" to Timestamp.now()
-                    )
-                )
-                ParticipationStatus.WAITING -> Unit // already in; nothing to do
-                else -> throw LotteryActionException("You can't rejoin this lottery.")
             }
+
+            // Atomic counter update within the same transaction.
+            tx.update(lotteryRef, "waitlistCount", count + 1L)
+
             null
         }.await()
     }
 
     /** Withdraws from the lottery. Only possible while WAITING and before the draw. */
+
     suspend fun leave(lotteryId: String, entrantId: String) {
-        val lotteryRef = db.collection(FirestorePaths.LOTTERIES).document(lotteryId)
+        val lotteryRef = db.collection(FirestorePaths.LOTTERIES)
+            .document(lotteryId)
         val ref = participationRef(lotteryId, entrantId)
 
         db.runTransaction<Any?> { tx ->
             val lotterySnap = tx.get(lotteryRef)
-            if (lotterySnap.exists() && lotterySnap.toLottery().drawCompletedAt != null) {
-                throw LotteryActionException("The draw has already happened, so you can't leave now.")
+            val participantSnap = tx.get(ref)
+
+            if (!lotterySnap.exists()) {
+                throw LotteryActionException("Lottery not found.")
             }
 
-            val snap = tx.get(ref)
-            if (!snap.exists() || snap.toParticipation().status != ParticipationStatus.WAITING) {
-                throw LotteryActionException("You aren't currently in this lottery.")
+            if (lotterySnap.toLottery().drawCompletedAt != null) {
+                throw LotteryActionException(
+                    "The draw has already happened."
+                )
             }
 
-            tx.update(ref, "status", ParticipationStatus.WITHDRAWN.name)
+            if (!participantSnap.exists() ||
+                participantSnap.toParticipation().status !=
+                ParticipationStatus.WAITING
+            ) {
+                throw LotteryActionException(
+                    "You aren't currently in this lottery."
+                )
+            }
+
+            val count = lotterySnap.getLong("waitlistCount")
+                ?: throw LotteryActionException(
+                    "Waitlist counter is not initialized."
+                )
+
+            if (count <= 0L) {
+                throw LotteryActionException(
+                    "Waitlist counter is inconsistent."
+                )
+            }
+
+            tx.update(
+                participantSnap.reference,
+                "status",
+                ParticipationStatus.WITHDRAWN.name
+            )
+
+            tx.update(
+                lotteryRef,
+                "waitlistCount",
+                count - 1L
+            )
+
             null
         }.await()
     }

@@ -622,9 +622,8 @@ fun OwnerCampsiteDetailsScreen(
                                     Text("No entrants have joined this lottery.")
                                 } else {
                                     entrants.forEach { entrant ->
-                                        Text(
-                                            "Entrant: ${entrant.entrantId}"
-                                        )
+                                        Text("Name: ${entrant.name}")
+                                        Text("Entrant ID: ${entrant.entrantId}")
                                         Text(
                                             "Status: ${entrant.status}"
                                         )

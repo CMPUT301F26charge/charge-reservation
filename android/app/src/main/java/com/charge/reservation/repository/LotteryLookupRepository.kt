@@ -64,7 +64,25 @@ class LotteryLookupRepository {
                                 found.lottery.drawCompletedAt == null
                     }
 
-                    onSuccess(activeLottery ?: lotteries.firstOrNull())
+                    val selected = activeLottery ?: lotteries.firstOrNull()
+
+                    if (selected == null) {
+                        onSuccess(null)
+                    } else {
+                        db.collection("lotteryParticipations")
+                            .whereEqualTo("lotteryId", selected.lottery.id)
+                            .whereEqualTo("status", "WAITING")
+                            .get(Source.SERVER)
+                            .addOnSuccessListener { participationDocs ->
+                                onSuccess(
+                                    selected.copy(
+                                        waitlistCount = participationDocs.size()
+                                    )
+                                )
+                            }
+                            .addOnFailureListener(onFailure)
+                    }
+
 
                 } catch (e: Exception) {
                     onFailure(e)

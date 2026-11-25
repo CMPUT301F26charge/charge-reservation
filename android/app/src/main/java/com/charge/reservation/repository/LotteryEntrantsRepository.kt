@@ -4,9 +4,12 @@ package com.charge.reservation.repository
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.DocumentSnapshot
 data class LotteryEntrantRow(
     val entrantId: String,
-    val status: String
+    val status: String,
+    val name: String = "Unknown entrant"
 )
 
 class LotteryEntrantsRepository(
@@ -45,10 +48,15 @@ class LotteryEntrantsRepository(
                     return@addOnSuccessListener
                 }
 
-                lotteryRef.collection("participants")
+                db.collection("lotteryParticipations")
+                    .whereEqualTo("lotteryId", lotteryId)
                     .get(Source.SERVER)
                     .addOnSuccessListener { result ->
-                        val entrants = result.documents.map { doc ->
+                        val entrants = result.documents
+                            .filter { doc ->
+                                doc.getString("status") != "WITHDRAWN"
+                            }
+                            .map { doc ->
                             LotteryEntrantRow(
                                 entrantId = doc.getString("entrantId")
                                     ?: doc.id,
@@ -62,7 +70,39 @@ class LotteryEntrantsRepository(
                             )
                         )
 
-                        onSuccess(entrants)
+                        if (entrants.isEmpty()) {
+                            onSuccess(entrants)
+                        } else {
+                            val profileTasks = entrants.map { entrant ->
+                                db.collection("users")
+                                    .document(entrant.entrantId)
+                                    .get(Source.SERVER)
+                            }
+
+                            Tasks.whenAllComplete(profileTasks)
+                                .addOnSuccessListener { completedTasks ->
+                                    val entrantsWithNames = entrants.mapIndexed { index, entrant ->
+                                        val task = completedTasks[index]
+                                        val user = if (task.isSuccessful) {
+                                            task.result as? DocumentSnapshot
+                                        } else {
+                                            null
+                                        }
+
+                                        entrant.copy(
+                                            name = user?.getString("name")
+                                                ?.takeIf { it.isNotBlank() }
+                                                ?: "Unknown entrant"
+                                        )
+                                    }
+
+                                    onSuccess(entrantsWithNames)
+                                }
+                                .addOnFailureListener {
+                                    onSuccess(entrants)
+                                }
+                        }
+
                     }
                     .addOnFailureListener(onFailure)
             }
