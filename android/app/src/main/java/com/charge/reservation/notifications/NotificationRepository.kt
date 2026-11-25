@@ -9,10 +9,30 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 class NotificationRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
+
+    /**
+     * Streams the user's `notificationEnabled` setting from users/[userId].
+     * A missing document or missing field counts as enabled, so existing users
+     * who never set the field keep seeing notifications.
+     * Only emits when the value actually changes.
+     */
+    fun notificationsEnabledFor(userId: String): Flow<Boolean> = callbackFlow {
+        val listener = db.collection("users")
+            .document(userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.getBoolean("notificationEnabled") ?: true)
+            }
+        awaitClose { listener.remove() }
+    }.distinctUntilChanged()
 
     /**
      * Streams the SENT notifications addressed to [recipientId], newest first.
