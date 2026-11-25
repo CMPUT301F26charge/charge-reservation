@@ -56,6 +56,7 @@ fun AppBottomBar(
         "createLottery/{campsiteId}" -> "ownerCampsites"
 
         "personalInfo",
+        "notificationSettings",
         "messages",
         "policies" -> "profile"
 

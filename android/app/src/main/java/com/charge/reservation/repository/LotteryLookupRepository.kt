@@ -61,29 +61,9 @@ class LotteryLookupRepository {
                 val documents = snapshot?.documents ?: return@addSnapshotListener
                 try {
                     val lotteries = documents.map { doc ->
-                        val lottery = Lottery(
-                            id = doc.id,
-                            ownerId = doc.getString("ownerId") ?: "",
-                            campsiteIds = (
-                                    doc.get("campsiteIds") as? List<*>
-                                    )?.filterIsInstance<String>().orEmpty(),
-                            registrationStartAt = doc
-                                .getTimestamp("registrationStartAt")
-                                ?.toDate()?.toInstant(),
-                            registrationEndAt = doc
-                                .getTimestamp("registrationEndAt")
-                                ?.toDate()?.toInstant(),
-                            waitlistCapacity = doc
-                                .getLong("waitlistCapacity")?.toInt(),
-                            drawCompletedAt = doc
-                                .getTimestamp("drawCompletedAt")
-                                ?.toDate()?.toInstant()
-                        )
-
                         FoundLottery(
-                            lottery = lottery,
-                            waitlistCount = doc
-                                .getLong("waitlistCount")?.toInt() ?: 0
+                            lottery = doc.toLottery(),
+                            waitlistCount = doc.getLong("waitlistCount")?.toInt() ?: 0
                         )
                     }
 

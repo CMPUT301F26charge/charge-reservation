@@ -61,6 +61,7 @@ import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.notifications.NotificationsRoute
 import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
+import com.charge.reservation.profile.NotificationSettingsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -72,7 +73,9 @@ import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 @Composable
 fun AppNavigation(
     profile: UserProfile,
-    onProfileUpdated: (UserProfile) -> Unit) {
+    onProfileUpdated: (UserProfile) -> Unit,
+    onNotificationPreferenceUpdated: (userId: String, enabled: Boolean) -> Unit
+) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentScreenEntry?.destination?.route
@@ -85,6 +88,7 @@ fun AppNavigation(
         "lotteryNotification/{lotteryId}",
         "personalInfo",
         "notifications",
+        "notificationSettings",
         "messages",
         "policies",
         "adminProfiles",
@@ -98,6 +102,8 @@ fun AppNavigation(
     }
     val lotteryLookupRepository = remember { LotteryLookupRepository() }
     val lotteryRepository = remember { LotteryRepository() }
+    var isSavingNotificationPreference by remember(profile.id) { mutableStateOf(false) }
+    var notificationPreferenceError by remember(profile.id) { mutableStateOf("") }
 
     val availableRoles = buildList<String> {
         if (!profile.removed) {
@@ -510,6 +516,11 @@ fun AppNavigation(
                     onNotificationsClick = {
                         navController.navigate("notifications")
                     },
+                    onNotificationSettingsClick = if (profile.isEntrant && !profile.removed) {
+                        { navController.navigate("notificationSettings") }
+                    } else {
+                        null
+                    },
                     onMessagesClick = {
                         navController.navigate("messages")
                     },
@@ -517,6 +528,43 @@ fun AppNavigation(
                         navController.navigate("policies")
                     }
                 )
+            }
+
+            composable("notificationSettings") {
+                if (!profile.isEntrant || profile.removed) {
+                    Text("Only active entrants can change notification settings.")
+                } else {
+                    NotificationSettingsScreen(
+                        notificationEnabled = profile.notificationEnabled,
+                        isSaving = isSavingNotificationPreference,
+                        saveError = notificationPreferenceError,
+                        onNotificationEnabledChange = { enabled ->
+                            if (!isSavingNotificationPreference) {
+                                isSavingNotificationPreference = true
+                                notificationPreferenceError = ""
+
+                                userProfileRepository.updateNotificationPreference(
+                                    userId = profile.id,
+                                    enabled = enabled,
+                                    onSuccess = {
+                                        onNotificationPreferenceUpdated(profile.id, enabled)
+                                        isSavingNotificationPreference = false
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e(
+                                            "NotificationSettings",
+                                            "Could not save notification preference",
+                                            exception
+                                        )
+                                        notificationPreferenceError =
+                                            "Could not save your preference. Please try again."
+                                        isSavingNotificationPreference = false
+                                    }
+                                )
+                            }
+                        }
+                    )
+                }
             }
 
             // Save personal information and update the app's current profile.

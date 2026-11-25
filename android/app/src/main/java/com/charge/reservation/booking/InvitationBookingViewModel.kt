@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.charge.reservation.model.Campsite
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +11,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import kotlinx.coroutines.Job
+
+import com.charge.reservation.model.Campsite
 
 data class BookingConfirmation(
     val reservationId: String,
@@ -80,6 +82,7 @@ class InvitationBookingViewModel(
 
     private val _state = MutableStateFlow(BookingUiState())
     val state: StateFlow<BookingUiState> = _state.asStateFlow()
+    private var nightsLoadJob: Job? = null
 
     init {
         load()
@@ -208,22 +211,43 @@ class InvitationBookingViewModel(
     }
 
     private fun refreshNights() {
-        val s = _state.value
-        val details = s.details ?: return
-        val campsiteId = s.selectedCampsiteId ?: return
-        viewModelScope.launch {
-            _state.update { it.copy(nightsLoading = true) }
+        val campsiteId = _state.value.selectedCampsiteId ?: return
+
+        nightsLoadJob?.cancel()
+        nightsLoadJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    nights = emptyList(),
+                    nightsLoading = true,
+                    rangeStart = null,
+                    rangeEnd = null
+                )
+            }
+
             try {
-                val nights = repository.loadNights(campsiteId, details.lottery)
-                _state.update {
-                    // Ignore the result if the user switched campsites while loading.
-                    if (it.selectedCampsiteId == campsiteId) it.copy(nights = nights, nightsLoading = false) else it
+                val nights = repository.loadNights(campsiteId, lotteryId)
+                _state.update { current ->
+                    if (current.selectedCampsiteId == campsiteId) {
+                        current.copy(nights = nights, nightsLoading = false)
+                    } else {
+                        current
+                    }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(nightsLoading = false, message = "Couldn't load available nights. Try again.")
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _state.update { current ->
+                    if (current.selectedCampsiteId == campsiteId) {
+                        current.copy(
+                            nights = emptyList(),
+                            nightsLoading = false,
+                            message = exception.userMessage(
+                                "Couldn't load available nights. Try again."
+                            )
+                        )
+                    } else {
+                        current
+                    }
                 }
             }
         }
