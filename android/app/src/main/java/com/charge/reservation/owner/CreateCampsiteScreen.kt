@@ -39,12 +39,16 @@ import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
 
 /**
- * Collects initial campsite details and passes them to the caller.
+ * Collects the details, nightly availability, and optional image for a new
+ * campsite. The caller saves the listing and reports the result to the screen.
  *
- * The caller supplies a stable campsite ID, saves the listing,
- * and provides saving progress and error messages.
+ * @param ownerId the campsite owner's Firebase Authentication UID.
+ * @param campsiteId the stable ID assigned to this campsite before saving.
+ * @param isSaving whether a save is in progress.
+ * @param errorMessage the save error to display, or an empty string if none.
+ * @param onCreateCampsite receives the campsite, its nightly availability records,
+ * and the selected image URI, or null for the URI if no image was selected.
  */
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateCampsiteScreen(

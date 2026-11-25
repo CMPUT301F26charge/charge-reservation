@@ -25,13 +25,15 @@ class CampsiteRepository {
     }
 
     /**
-     * Creates a campsite using its ID as the document ID.
+     * Saves a new campsite and its nightly availability without overwriting
+     * an existing listing. If an image is provided, uploads it before saving.
      *
-     * Refuses to overwrite an existing listing.
-     *
-     * @param campsite the listing, including its ID and owner's UID.
-     * @param onSuccess called after the listing is successfully saved.
-     * @param onFailure receives validation or Firestore errors.
+     * @param campsite the listing, including its ID and the owner's Firebase UID.
+     * @param availabilityDays the nightly availability records to save.
+     * At least one night is required.
+     * @param imageUri the selected image's URI, or null to save without an upload.
+     * @param onSuccess called after the campsite and its availability are saved.
+     * @param onFailure receives validation, image upload, or Firestore errors.
      */
     fun createCampsite (
         campsite: Campsite,
@@ -292,7 +294,13 @@ class CampsiteRepository {
     }
 
     /**
-     * Loads the selected campsite's saved nightly availability once.
+     * Loads the campsite's saved nightly availability from Firestore once.
+     *
+     * @param campsiteId the ID of the campsite to load.
+     * @param onSuccess receives the nights in date order, or an empty list
+     * if the campsite has no saved nights.
+     * @param onFailure receives the error if the read fails or a saved
+     * availability record is invalid.
      */
     fun getAvailability(
         campsiteId: String,
