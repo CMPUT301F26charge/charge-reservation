@@ -215,7 +215,14 @@ class InvitationBookingViewModel(
 
         nightsLoadJob?.cancel()
         nightsLoadJob = viewModelScope.launch {
-            _state.update { it.copy(nightsLoading = true) }
+            _state.update {
+                it.copy(
+                    nights = emptyList(),
+                    nightsLoading = true,
+                    rangeStart = null,
+                    rangeEnd = null
+                )
+            }
 
             try {
                 val nights = repository.loadNights(campsiteId, lotteryId)
