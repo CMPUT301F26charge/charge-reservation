@@ -95,13 +95,13 @@ async function drawClosedLottery(db, lotteryId) {
             .collection("lotteryParticipations")
             .where("lotteryId", "==", lotteryId)
             .where("status", "==", "WAITING")
-            .limit(451);
+            .limit(201);
 
         const waitingSnap = await transaction.get(waitingQuery);
 
-        if (waitingSnap.size > 450) {
+        if (waitingSnap.size > 200) {
             throw new Error(
-                "More than 450 waiting entrants. " +
+                "More than 200 waiting entrants. " +
                 "A larger-scale draw strategy is required."
             );
         }
@@ -118,20 +118,36 @@ async function drawClosedLottery(db, lotteryId) {
         const winnerSet = new Set(winners);
 
         // No writes occur until all reads finish.
-        for (const participantDoc of waitingSnap.docs) {
-            const selected = winnerSet.has(
-                participantDoc.get("entrantId")
-            );
 
-            transaction.update(
-                participantDoc.ref,
-                {
-                    status: selected
-                        ? "INVITED"
-                        : "NOT_SELECTED"
-                }
-            );
+        for (const participantDoc of waitingSnap.docs) {
+            const entrantId = participantDoc.get("entrantId");
+            const selected = winnerSet.has(entrantId);
+
+            const status = selected ? "INVITED" : "NOT_SELECTED";
+
+            transaction.update(participantDoc.ref, {
+                status
+            });
+
+            const notificationRef = db
+                .collection("notifications")
+                .doc(`lottery-result-${participantDoc.id}`);
+
+            transaction.set(notificationRef, {
+                recipientId: entrantId,
+                senderId: null,
+                type: "SYSTEM",
+                content: selected
+                    ? "Congratulations! You have been selected in the lottery."
+                    : "Unfortunately, you were not selected in the lottery.",
+                lotteryId: lotteryId,
+                reservationId: null,
+                campsiteId: null,
+                sendStatus: "SENT",
+                createdAt: now
+            });
         }
+
 
         // Marks completion even if nobody entered.
         // This prevents repeated draws of empty lotteries.
