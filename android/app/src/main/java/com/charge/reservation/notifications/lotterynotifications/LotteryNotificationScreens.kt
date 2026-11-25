@@ -170,11 +170,12 @@ fun LotteryWonNotificationScreen(
 fun LotteryLostNotificationScreen(
     lotteryName: String,
     lotteryCode: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    backLabel: String = "Back to notifications"
 ) {
     LotteryNotificationLayout(
         title = "Lottery Result",
-        primaryText = "Back to notifications",
+        primaryText = backLabel,
         onPrimaryAction = onBack
     ) {
         OutcomeCard(
@@ -208,7 +209,8 @@ fun LotteryBookingConfirmedScreen(
     lotteryCode: String,
     campsiteName: String?,
     reservation: Reservation?,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    backLabel: String = "Back to notifications"
 ) {
     val cancelledOrRejected = reservation?.status == ReservationStatus.CANCELLED ||
         reservation?.status == ReservationStatus.REJECTED
@@ -220,7 +222,7 @@ fun LotteryBookingConfirmedScreen(
 
     LotteryNotificationLayout(
         title = "Invitation Used",
-        primaryText = "Back to notifications",
+        primaryText = backLabel,
         onPrimaryAction = onBack
     ) {
         OutcomeCard(

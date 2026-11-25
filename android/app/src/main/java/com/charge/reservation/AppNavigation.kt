@@ -56,7 +56,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.charge.reservation.booking.InvitationBookingScreen
 import com.charge.reservation.notifications.lotterynotifications.LotteryNotificationRoute
-
+import com.charge.reservation.entrant.EntrantLotteriesScreen
 import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
 
@@ -332,34 +332,28 @@ fun AppNavigation(
                             )
 
                             DisposableEffect(campsite.id) {
-                                var active = true
-
                                 isLoadingLottery = true
                                 lotteryError = ""
 
-                                lotteryLookupRepository.getForCampsite(
+                                val listener = lotteryLookupRepository.listenToCampsiteLottery(
                                     campsiteId = campsite.id,
                                     onSuccess = { result ->
-                                        if (active) {
-                                            foundLottery = result
-                                            isLoadingLottery = false
-                                        }
+                                        foundLottery = result
+                                        isLoadingLottery = false
+                                        lotteryError = ""
                                     },
                                     onFailure = { exception ->
-                                        if (active) {
-                                            Log.e("LotteryLookup", "Failed to load lottery", exception)
-
-                                            lotteryError = "Lottery information is unavailable. " +
+                                        Log.e("LotteryLookup", "Failed to load lottery", exception)
+                                        foundLottery = null
+                                        isLoadingLottery = false
+                                        lotteryError =
+                                            "Lottery information is unavailable. " +
                                                     "Please check your internet connection and try again."
-
-                                            isLoadingLottery = false
-                                        }
                                     }
                                 )
 
-                                onDispose { active = false }
+                                onDispose { listener.remove() }
                             }
-
 
                             DisposableEffect(campsite.id) {
                                 var active = true
@@ -404,6 +398,7 @@ fun AppNavigation(
                                         lotteryButtonState = lotteryAction.buttonState,
                                         isLotteryActionWorking = lotteryAction.isWorking,
                                         lotteryActionError = lotteryAction.error,
+                                        now = lotteryAction.now,
                                         onLotteryAction = lotteryAction.onClick,
 
                                         availabilityDays = availabilityDays,
@@ -420,7 +415,12 @@ fun AppNavigation(
 
             composable("lotteries") {
                 if (profile.isEntrant && !profile.removed) {
-                    Text("Lottery entries, not connected yet")
+                    EntrantLotteriesScreen(
+                        entrantId = profile.id,
+                        onOpenLottery = { lotteryId ->
+                            navController.navigate("lotteryNotification/${Uri.encode(lotteryId)}")
+                        }
+                    )
                 } else {
                     Text("Only entrants can view this page.")
                 }
@@ -466,6 +466,13 @@ fun AppNavigation(
                     LotteryNotificationRoute(
                         lotteryId = lotteryId,
                         entrantId = profile.id,
+                        backLabel = remember(entry) {
+                            if (navController.previousBackStackEntry?.destination?.route == "lotteries") {
+                                "Back to lotteries"
+                            } else {
+                                "Back to notifications"
+                            }
+                        },
                         onOpenInvitation = { id, campsiteId ->
                             val query = campsiteId?.let { "?campsiteId=${Uri.encode(it)}" }.orEmpty()
                             navController.navigate("invitation/${Uri.encode(id)}$query")

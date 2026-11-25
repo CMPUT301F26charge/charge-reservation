@@ -65,6 +65,10 @@ fun CreateLotteryScreen(
         mutableStateOf("")
     }
 
+    var waitlistCapacityInput by rememberSaveable(campsite.id) {
+        mutableStateOf("")
+    }
+
     var registrationStartDateMillis by rememberSaveable(campsite.id) {
         mutableStateOf<Long?>(null)
     }
@@ -283,6 +287,28 @@ fun CreateLotteryScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        val capacityText = waitlistCapacityInput.trim()
+        val waitlistCapacity = capacityText.toIntOrNull()
+        val capacityError = if (
+            capacityText.isNotEmpty() && (waitlistCapacity == null || waitlistCapacity <= 0)
+        ) {
+            "Enter a whole number greater than zero."
+        } else {
+            null
+        }
+
+        OutlinedTextField(
+            value = waitlistCapacityInput,
+            onValueChange = { waitlistCapacityInput = it },
+            label = { Text("Waitlist limit (optional)") },
+            supportingText = { Text(capacityError ?: "Leave blank for no limit.") },
+            isError = capacityError != null,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+
         val registrationOpensAt = lotteryDateTimeInstant(
             registrationStartDateMillis,
             registrationStartMinutes,
@@ -320,6 +346,8 @@ fun CreateLotteryScreen(
             winnerCount == null || winnerCount <= 0 ->
                 "Enter a whole number of winners greater than zero."
 
+            capacityError != null -> capacityError
+
             else -> null
         }
 
@@ -353,6 +381,7 @@ fun CreateLotteryScreen(
                                 requireNotNull(bookingEnd)
                             ).atZone(ZoneOffset.UTC).toLocalDate(),
                             timeZone = ZoneId.of(timeZoneId),
+                            waitlistCapacity = waitlistCapacity,
                             winnerCount = winnerCount
                         )
                     )

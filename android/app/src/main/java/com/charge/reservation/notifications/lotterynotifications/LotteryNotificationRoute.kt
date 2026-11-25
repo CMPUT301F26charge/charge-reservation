@@ -32,6 +32,7 @@ fun LotteryNotificationRoute(
     lotteryId: String,
     entrantId: String?,
     onOpenInvitation: (lotteryId: String, campsiteId: String?) -> Unit,
+    backLabel: String,
     onBack: () -> Unit,
     vm: LotteryNotificationViewModel = viewModel(key = "lottery-notification-$lotteryId")
 ) {
@@ -57,6 +58,7 @@ fun LotteryNotificationRoute(
         LotteryStatusMessageScreen(
             heading = "Not signed in",
             message = "Sign in to view this lottery notification.",
+            primaryText = backLabel,
             onBack = onBack
         )
         return
@@ -68,6 +70,7 @@ fun LotteryNotificationRoute(
         LotteryNotificationState.NotFound -> LotteryStatusMessageScreen(
             heading = "Lottery not found",
             message = "This lottery or your entry in it could not be found. It may have been removed.",
+            primaryText = backLabel,
             onBack = onBack
         )
 
@@ -85,6 +88,7 @@ fun LotteryNotificationRoute(
             declineError = declineError,
             onOpenInvitation = { campsiteId -> onOpenInvitation(lotteryId, campsiteId) },
             onDecline = vm::declineInvitation,
+            backLabel = backLabel,
             onBack = onBack
         )
     }
@@ -97,6 +101,7 @@ private fun LoadedLotteryNotification(
     declineError: String?,
     onOpenInvitation: (campsiteId: String?) -> Unit,
     onDecline: () -> Unit,
+    backLabel: String,
     onBack: () -> Unit
 ) {
     val deadlinePassed = data.deadlinePassed()
@@ -118,6 +123,7 @@ private fun LoadedLotteryNotification(
             LotteryLostNotificationScreen(
                 lotteryName = data.lotteryName,
                 lotteryCode = data.lotteryCode,
+                backLabel = backLabel,
                 onBack = onBack
             )
 
@@ -127,6 +133,7 @@ private fun LoadedLotteryNotification(
                 lotteryCode = data.lotteryCode,
                 campsiteName = data.reservationCampsiteName,
                 reservation = data.reservation,
+                backLabel = backLabel,
                 onBack = onBack
             )
 
@@ -137,6 +144,7 @@ private fun LoadedLotteryNotification(
                 lotteryCode = data.lotteryCode,
                 heading = heading,
                 message = message,
+                primaryText = backLabel,
                 onBack = onBack
             )
         }
