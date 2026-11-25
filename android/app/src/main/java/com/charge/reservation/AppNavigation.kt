@@ -11,7 +11,6 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.charge.reservation.notifications.NotificationsRoute
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,6 +59,8 @@ import com.charge.reservation.notifications.lotterynotifications.LotteryNotifica
 import com.charge.reservation.entrant.EntrantLotteriesScreen
 import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
+import com.charge.reservation.notifications.NotificationsRoute
+import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -77,6 +78,7 @@ fun AppNavigation(
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
+        "ownerLotteryEntrants/{lotteryId}",
         "ownerBookedDates/{campsiteId}",
         "createCampsite",
         "createLottery/{campsiteId}",
@@ -840,6 +842,11 @@ fun AppNavigation(
                                     )
                                 }
                             },
+                            onViewEntrantsClick = { lotteryId ->
+                                navController.navigate(
+                                    "ownerLotteryEntrants/${Uri.encode(lotteryId)}"
+                                )
+                            },
                             onCreateLotteryClick = {
                                 if (campsite != null) {
                                     navController.navigate(
@@ -849,6 +856,30 @@ fun AppNavigation(
                             }
                         )
                     }
+                }
+            }
+
+            composable(
+                route = "ownerLotteryEntrants/{lotteryId}",
+                arguments = listOf(
+                    navArgument("lotteryId") { type = NavType.StringType }
+                )
+            ) { entry ->
+                val lotteryId = entry.arguments?.getString("lotteryId")
+
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can view lottery entrants.")
+                    }
+
+                    lotteryId == null || lotteryId.isBlank() -> {
+                        Text("Lottery not found.")
+                    }
+
+                    else -> OwnerLotteryEntrantsScreen(
+                        lotteryId = lotteryId,
+                        ownerId = profile.id
+                    )
                 }
             }
 

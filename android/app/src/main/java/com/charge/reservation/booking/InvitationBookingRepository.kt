@@ -331,7 +331,8 @@ fun DocumentSnapshot.toParticipation() = LotteryParticipation(
     entrantId = getString("entrantId").orEmpty(),
     joinedAt = get("joinedAt").toInstantOrNull(),
     status = getString("status").toEnumOrNull<ParticipationStatus>() ?: ParticipationStatus.WAITING,
-    reservationId = getString("reservationId")
+    reservationId = getString("reservationId"),
+    entrantDisplayName = get("entrantDisplayName") as? String
 )
 
 private fun DocumentSnapshot.toAvailabilityDay() = AvailabilityDay(

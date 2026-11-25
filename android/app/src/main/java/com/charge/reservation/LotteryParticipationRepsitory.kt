@@ -2,16 +2,19 @@ package com.charge.reservation
 
 import kotlinx.coroutines.tasks.await
 import java.time.Instant
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.AggregateSource
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 import com.charge.reservation.booking.FirestorePaths
 import com.charge.reservation.booking.toLottery
 import com.charge.reservation.booking.toParticipation
 import com.charge.reservation.model.LotteryParticipation
 import com.charge.reservation.model.ParticipationStatus
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.AggregateSource
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 
 /** An error whose message is safe to show directly to the user. */
 class LotteryActionException(message: String) : Exception(message)
@@ -61,6 +64,43 @@ class LotteryParticipationRepository(
                 onSuccess(entries)
             }
 
+    fun ownerLotteryEntrants(
+        lotteryId: String,
+        ownerId: String
+    ): Flow<List<LotteryParticipation>> = callbackFlow {
+        val lottery = db.collection(FirestorePaths.LOTTERIES)
+            .document(lotteryId)
+            .get()
+            .await()
+
+        if (!lottery.exists() || lottery.getString("ownerId") != ownerId) {
+            throw LotteryActionException("This lottery is unavailable to your owner profile.")
+        }
+
+        val listener = db.collection(FirestorePaths.PARTICIPATIONS)
+            .whereEqualTo("lotteryId", lotteryId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+
+                val documents = snapshot?.documents ?: return@addSnapshotListener
+                val entrants = try {
+                    documents.map { it.toParticipation() }
+                        .filter { it.status != ParticipationStatus.WITHDRAWN }
+                        .sortedBy { it.joinedAt }
+                } catch (exception: Exception) {
+                    close(exception)
+                    return@addSnapshotListener
+                }
+
+                trySend(entrants)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
     /**
      * Joins the lottery (or rejoins after withdrawing).
      *
@@ -109,12 +149,16 @@ class LotteryParticipationRepository(
                 throw LotteryActionException("This lottery's waitlist is full.")
             }
 
+            val entrantProfile = tx.get(db.collection("users").document(entrantId))
+            val entrantDisplayName = entrantProfile.get("name") as? String
+
             if (existing.exists()) {
                 tx.update(
                     ref,
                     mapOf(
                         "status" to ParticipationStatus.WAITING.name,
-                        "joinedAt" to Timestamp.now()
+                        "joinedAt" to Timestamp.now(),
+                        "entrantDisplayName" to entrantDisplayName
                     )
                 )
             } else {
@@ -125,6 +169,7 @@ class LotteryParticipationRepository(
                         "entrantId" to entrantId,
                         "joinedAt" to Timestamp.now(),
                         "status" to ParticipationStatus.WAITING.name,
+                        "entrantDisplayName" to entrantDisplayName,
                         "reservationId" to null
                     )
                 )

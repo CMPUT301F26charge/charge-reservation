@@ -51,6 +51,7 @@ fun AppBottomBar(
     val selectedRoute = when (currentRoute) {
         "ownerCampsiteDetails/{campsiteId}",
         "ownerBookedDates/{campsiteId}",
+        "ownerLotteryEntrants/{lotteryId}",
         "createCampsite",
         "createLottery/{campsiteId}" -> "ownerCampsites"
 

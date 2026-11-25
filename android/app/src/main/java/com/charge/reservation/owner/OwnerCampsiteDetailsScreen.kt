@@ -58,6 +58,7 @@ fun OwnerCampsiteDetailsScreen(
     onRetryLotteries: () -> Unit,
     onRetryAvailability: () -> Unit,
     onViewBookedDatesClick: () -> Unit,
+    onViewEntrantsClick: (String) -> Unit,
     onCreateLotteryClick: () -> Unit
 ) {
     var now by remember(campsite?.id) {
@@ -289,6 +290,10 @@ fun OwnerCampsiteDetailsScreen(
                             )
 
                             Text("Number of winners: ${lottery.winnerCount}")
+
+                            Button(onClick = { onViewEntrantsClick(lottery.id) }) {
+                                Text("View entrants")
+                            }
                         }
                     }
                 }
