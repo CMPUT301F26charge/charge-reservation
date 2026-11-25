@@ -11,12 +11,17 @@ import java.time.LocalDate
 import java.time.Instant
 import java.time.ZoneOffset
 
+import android.util.Log
+import com.google.firebase.firestore.Source
+import com.google.firebase.firestore.DocumentSnapshot
+
 /**
  * Provides live reservation updates for a campsite.
  */
 class OwnerBookingsRepository(
     private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
+
     fun listenToBookings(
         campsiteId: String,
         onSuccess: (List<Reservation>) -> Unit,
@@ -26,51 +31,73 @@ class OwnerBookingsRepository(
             "Campsite ID cannot be blank."
         }
 
-        return db.collection("reservations")
+        val query = db.collection("reservations")
             .whereEqualTo("campsiteId", campsiteId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    onFailure(error)
-                    return@addSnapshotListener
-                }
 
-                try {
-                    val bookings = snapshot?.documents?.map { doc ->
-                        val status = ReservationStatus.valueOf(
-                            doc.getString("status") ?: "CONFIRMED"
-                        )
-
-                        Reservation(
-                            id = doc.id,
-                            campsiteId = doc.getString("campsiteId") ?: "",
-                            lotteryId = doc.getString("lotteryId") ?: "",
-                            entrantId = doc.getString("entrantId") ?: "",
-                            checkInDate = OwnerReservationParser.parseDate(
-                                doc.get("checkInDate")
-                            ),
-                            checkOutDate = OwnerReservationParser.parseDate(
-                                doc.get("checkOutDate")
-                            ),
-                            guestCount = doc.getLong("guestCount")?.toInt(),
-                            status = status,
-                            createdAt = OwnerReservationParser.parseInstant(
-                                doc.get("createdAt")
-                            ),
-                            statusChangedAt = OwnerReservationParser.parseInstant(
-                                doc.get("statusChangedAt")
-                            ),
-                            statusChangeReason =
-                                doc.getString("statusChangeReason")
-                        )
-                    } ?: emptyList()
-
-                    onSuccess(
-                        bookings.sortedBy { it.checkInDate }
+        fun processDocuments(documents: List<DocumentSnapshot>) {
+            try {
+                val bookings = documents.map { doc ->
+                    Reservation(
+                        id = doc.id,
+                        campsiteId = doc.getString("campsiteId") ?: "",
+                        lotteryId = doc.getString("lotteryId") ?: "",
+                        entrantId = doc.getString("entrantId") ?: "",
+                        checkInDate = OwnerReservationParser.parseDate(
+                            doc.get("checkInDate")
+                        ),
+                        checkOutDate = OwnerReservationParser.parseDate(
+                            doc.get("checkOutDate")
+                        ),
+                        guestCount = when (val raw = doc.get("guestCount")) {
+                            is Number -> raw.toInt()
+                            is String -> raw.toIntOrNull()
+                            else -> null
+                        },
+                        status = ReservationStatus.valueOf(
+                            (doc.getString("status") ?: "CONFIRMED").uppercase()
+                        ),
+                        createdAt = OwnerReservationParser.parseInstant(
+                            doc.get("createdAt")
+                        ),
+                        statusChangedAt = OwnerReservationParser.parseInstant(
+                            doc.get("statusChangedAt")
+                        ),
+                        statusChangeReason =
+                            doc.getString("statusChangeReason")
                     )
-                } catch (exception: Exception) {
-                    onFailure(exception)
                 }
+
+                Log.d(
+                    "OwnerBookings",
+                    "Campsite $campsiteId: ${bookings.size} reservations"
+                )
+
+                onSuccess(bookings.sortedBy { it.checkInDate })
+
+            } catch (exception: Exception) {
+                Log.e("OwnerBookings", "Reservation parsing failed", exception)
+                onFailure(exception)
             }
+        }
+
+        val listener = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                onFailure(error)
+            } else if (snapshot != null && !snapshot.metadata.isFromCache) {
+                processDocuments(snapshot.documents)
+            }
+        }
+
+        query.get(Source.SERVER)
+            .addOnSuccessListener { snapshot ->
+                processDocuments(snapshot.documents)
+            }
+            .addOnFailureListener { error ->
+                Log.e("OwnerBookings", "Server fetch failed", error)
+                onFailure(error)
+            }
+
+        return listener
     }
 }
 
