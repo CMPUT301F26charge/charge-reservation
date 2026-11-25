@@ -131,6 +131,16 @@ class UserProfileRepository {
         }
     }
 
+    /**
+     * Saves the user's notification preference in Firestore.
+     * Rejects missing profiles, removed profiles, and profiles explicitly
+     * marked as non-entrants.
+     *
+     * @param userId the user's Firebase Authentication UID.
+     * @param enabled whether app notifications should be enabled.
+     * @param onSuccess called after Firestore saves the preference.
+     * @param onFailure receives the validation or Firestore error.
+     */
     fun updateNotificationPreference(
         userId: String,
         enabled: Boolean,

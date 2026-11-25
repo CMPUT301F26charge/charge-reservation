@@ -12,6 +12,8 @@ package com.charge.reservation.model
  * @property isEntrant whether the user has the entrant role
  * @property isOwner whether the user has the campsite owner role
  * @property isAdmin whether the user has the administrator role
+ * @property removed whether the profile is marked as removed. The app blocks
+ * access to the main screens when this is true.
  */
 data class UserProfile(
     val id: String = "",

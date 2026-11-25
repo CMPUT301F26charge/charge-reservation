@@ -42,16 +42,17 @@ import com.charge.reservation.model.Lottery
 /**
  * Collects lottery settings for one registered campsite.
  *
- * Publishing requires all required fields, valid date/time ordering,
- * and a positive whole-number winner count. Date/time selections use
- * the displayed time zone. Form inputs remain when a save fails.
+ * Publishing requires valid dates and times and a positive whole-number
+ * winner count. Dates and times use the displayed time zone. A blank
+ * waitlist limit means unlimited entries. If supplied, the limit must be
+ * a positive whole number. The form keeps its values if saving fails.
  *
  * @param campsite the registered campsite associated with this lottery.
- * @param lotteryId stable document ID retained for this creation form.
- * @param isSaving disables publishing while a save is pending.
- * @param errorMessage save failure message, or empty when none exists.
- * @param onCreateLottery receives the validated configuration when
- * Publish is pressed; the caller performs saving and handles its result.
+ * @param lotteryId the stable document ID for this lottery.
+ * @param isSaving whether a save is in progress. Disables publishing while true.
+ * @param errorMessage the save error to display, or an empty string if none.
+ * @param onCreateLottery receives the validated lottery when Publish is pressed.
+ * The caller saves it and handles the result.
  */
 @Composable
 fun CreateLotteryScreen(
