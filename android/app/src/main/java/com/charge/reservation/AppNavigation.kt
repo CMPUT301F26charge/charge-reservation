@@ -62,6 +62,7 @@ import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.notifications.NotificationsRoute
 import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 import com.charge.reservation.profile.NotificationSettingsScreen
+import com.charge.reservation.profile.PoliciesScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -654,7 +655,7 @@ fun AppNavigation(
             }
 
             composable("policies") {
-                Text("Policy and guidelines, not connected yet")
+                PoliciesScreen()
             }
 
             composable("notifications") {
