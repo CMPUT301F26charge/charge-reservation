@@ -132,6 +132,34 @@ class UserProfileRepository {
     }
 
     /**
+     * Permanently deletes the user's profile document from Firestore.
+     *
+     * Only the users/{userId} document is deleted. Records that reference
+     * the user (campsites, lottery participations, reservations, etc.)
+     * are left unchanged.
+     *
+     * @param userId the user's Firebase Authentication UID.
+     * @param onSuccess called after Firestore deletes the document.
+     * @param onFailure receives the validation or Firestore error.
+     */
+    fun deleteProfile(
+        userId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        if (userId.isBlank()) {
+            onFailure(IllegalArgumentException("User ID cannot be blank."))
+            return
+        }
+
+        firestore.collection("users")
+            .document(userId)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { exception -> onFailure(exception) }
+    }
+
+    /**
      * Saves the user's notification preference in Firestore.
      * Rejects missing profiles, removed profiles, and profiles explicitly
      * marked as non-entrants.

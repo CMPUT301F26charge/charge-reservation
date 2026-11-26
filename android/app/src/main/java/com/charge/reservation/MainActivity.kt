@@ -137,7 +137,10 @@ class MainActivity : ComponentActivity() {
                                                 current.profile.copy(notificationEnabled = enabled)
                                             )
                                         }
-                                    }
+                                    },
+                                    // Reload: with no profile document, the app
+                                    // shows the Create Profile screen again.
+                                    onProfileDeleted = { launchApp() }
                                 )
                             }
 

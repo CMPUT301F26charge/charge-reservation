@@ -74,7 +74,8 @@ import com.charge.reservation.profile.NotificationSettingsScreen
 fun AppNavigation(
     profile: UserProfile,
     onProfileUpdated: (UserProfile) -> Unit,
-    onNotificationPreferenceUpdated: (userId: String, enabled: Boolean) -> Unit
+    onNotificationPreferenceUpdated: (userId: String, enabled: Boolean) -> Unit,
+    onProfileDeleted: () -> Unit
 ) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
@@ -509,7 +510,36 @@ fun AppNavigation(
             }
 
             composable("profile") {
+                var isDeletingProfile by remember(profile.id) { mutableStateOf(false) }
+                var deleteProfileError by remember(profile.id) { mutableStateOf("") }
+
                 ProfileMenuScreen(
+                    isDeletingProfile = isDeletingProfile,
+                    deleteProfileError = deleteProfileError,
+                    onDeleteProfileConfirmed = {
+                        if (!isDeletingProfile) {
+                            isDeletingProfile = true
+                            deleteProfileError = ""
+
+                            userProfileRepository.deleteProfile(
+                                userId = profile.id,
+                                onSuccess = {
+                                    isDeletingProfile = false
+                                    onProfileDeleted()
+                                },
+                                onFailure = { exception ->
+                                    Log.e(
+                                        "ProfileDeletion",
+                                        "Could not delete profile",
+                                        exception
+                                    )
+                                    isDeletingProfile = false
+                                    deleteProfileError =
+                                        "Could not delete your profile. Please try again."
+                                }
+                            )
+                        }
+                    },
                     onPersonalInfoClick = {
                         navController.navigate("personalInfo")
                     },
