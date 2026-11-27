@@ -63,6 +63,8 @@ import com.charge.reservation.notifications.NotificationsRoute
 import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 import com.charge.reservation.profile.NotificationSettingsScreen
 import com.charge.reservation.profile.PoliciesScreen
+import com.charge.reservation.review.CreateReviewScreen
+import com.charge.reservation.review.ReviewsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -93,6 +95,8 @@ fun AppNavigation(
         "notificationSettings",
         "messages",
         "policies",
+        "campsiteReviews/{campsiteId}",
+        "createReview/{campsiteId}",
         "adminProfiles",
         "adminImages",
         "adminNotificationLogs",
@@ -414,13 +418,70 @@ fun AppNavigation(
 
                                         availabilityDays = availabilityDays,
                                         isLoadingAvailability = isLoadingAvailability,
-                                        availabilityError = availabilityError
+                                        availabilityError = availabilityError,
 
+                                        onRatingClick = {
+                                            navController.navigate(
+                                                "campsiteReviews/${Uri.encode(campsite.id)}"
+                                            )
+                                        }
                                     )
                                 }
                             }
                         }
                     }
+                }
+            }
+
+            // All ratings count toward the average; only written reviews are listed.
+            composable(
+                route = "campsiteReviews/{campsiteId}",
+                arguments = listOf(
+                    navArgument("campsiteId") { type = NavType.StringType }
+                )
+            ) { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId").orEmpty()
+
+                if (campsiteId.isBlank()) {
+                    Text("Campsite not found.")
+                } else {
+                    ReviewsScreen(
+                        campsiteId = campsiteId,
+                        userId = profile.id,
+                        onWriteReviewClick = {
+                            navController.navigate(
+                                "createReview/${Uri.encode(campsiteId)}"
+                            )
+                        }
+                    )
+                }
+            }
+
+            composable(
+                route = "createReview/{campsiteId}",
+                arguments = listOf(
+                    navArgument("campsiteId") { type = NavType.StringType }
+                )
+            ) { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId").orEmpty()
+
+                when {
+                    !profile.isEntrant || profile.removed -> {
+                        Text("Only entrants can write reviews.")
+                    }
+
+                    campsiteId.isBlank() -> Text("Campsite not found.")
+
+                    else -> CreateReviewScreen(
+                        campsiteId = campsiteId,
+                        userId = profile.id,
+                        onReviewPosted = {
+                            // Return to the reviews only if this form is still open.
+                            if (navController.currentBackStackEntry == entry) {
+                                navController.popBackStack()
+                            }
+                        }
+                    )
                 }
             }
 

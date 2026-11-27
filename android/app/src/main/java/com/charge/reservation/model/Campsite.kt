@@ -15,6 +15,7 @@ package com.charge.reservation.model
  * @property maxOccupancy the maximum number of guests, or null if not provided
  * @property pricePerNight the price per night, or null if not provided
  * @property averageRating the calculated average score, or null if no ratings exist
+ * @property ratingCount the number of ratings included in the average
  * @property removed whether the campsite has been removed from active listings
  * @property rules the rules guests must follow
  * @property cancellationPolicy the conditions for cancelling a reservation
@@ -33,6 +34,7 @@ data class Campsite (
     val maxOccupancy: Int? = null,
     val pricePerNight: Double? = null,
     val averageRating: Double? = null,
+    val ratingCount: Int = 0,
     val removed: Boolean = false,
 
     val rules: String = "",
