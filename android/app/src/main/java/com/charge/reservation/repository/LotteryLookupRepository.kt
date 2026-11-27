@@ -9,15 +9,26 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.charge.reservation.booking.FirestorePaths
 import com.charge.reservation.booking.toLottery
 
+/**
+ * A campsite lottery listing and its current waitlist count.
+ *
+ * @property lottery the configuration shared by the included campsites.
+ * @property waitlistCount the number of current waitlist entries.
+ */
 data class FoundLottery(
     val lottery: Lottery,
     val waitlistCount: Int
 )
 
+/** Resolves lottery titles and observes the lotteries listed on a campsite. */
 class LotteryLookupRepository {
 
     private val db = FirebaseFirestore.getInstance()
 
+    /**
+     * Returns a title based on an included campsite, or null if none has a name.
+     * Firestore read or conversion errors propagate to the caller.
+     */
     suspend fun getLotteryTitle(lotteryId: String): String? {
         val lottery = db.collection(FirestorePaths.LOTTERIES)
             .document(lotteryId)
@@ -45,9 +56,17 @@ class LotteryLookupRepository {
         return null
     }
 
-    fun listenToCampsiteLottery(
+    /**
+     * Watches all listings containing the campsite, with open registration first.
+     *
+     * @param campsiteId the campsite whose lotteries to load.
+     * @param onSuccess receives the matching lotteries, or an empty list.
+     * @param onFailure receives a Firestore or stored-data conversion error.
+     * @return the listener registration, which the caller removes when leaving.
+     */
+    fun listenToCampsiteLotteries(
         campsiteId: String,
-        onSuccess: (FoundLottery?) -> Unit,
+        onSuccess: (List<FoundLottery>) -> Unit,
         onFailure: (Exception) -> Unit
     ): ListenerRegistration {
         return db.collection("lotteries")
@@ -69,7 +88,7 @@ class LotteryLookupRepository {
 
                     val now = Instant.now()
 
-                    val activeLottery = lotteries.firstOrNull { found ->
+                    val orderedLotteries = lotteries.sortedByDescending { found ->
                         val start = found.lottery.registrationStartAt
                         val end = found.lottery.registrationEndAt
 
@@ -80,7 +99,7 @@ class LotteryLookupRepository {
                                 found.lottery.drawCompletedAt == null
                     }
 
-                    onSuccess(activeLottery ?: lotteries.firstOrNull())
+                    onSuccess(orderedLotteries)
 
                 } catch (e: Exception) {
                     onFailure(e)

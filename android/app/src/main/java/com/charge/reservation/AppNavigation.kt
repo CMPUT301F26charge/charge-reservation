@@ -65,8 +65,7 @@ import com.charge.reservation.profile.NotificationSettingsScreen
 import com.charge.reservation.profile.PoliciesScreen
 
 /**
- * Connects role navigation with campsite and lottery repository operations.
- * Entrant lottery and booking destinations are currently placeholders.
+ * Connects role navigation with profile, campsite, lottery, and booking screens.
  *
  * @param profile signed-in user's profile used for role and ownership checks.
  */
@@ -312,8 +311,11 @@ fun AppNavigation(
                     selectedCampsite == null -> Text("Campsite not found.")
                     else -> {
                         selectedCampsite?.let { campsite ->
-                            var foundLottery by remember(campsite.id) {
-                                mutableStateOf<FoundLottery?>(null)
+                            var foundLotteries by remember(campsite.id) {
+                                mutableStateOf<List<FoundLottery>>(emptyList())
+                            }
+                            var selectedLotteryId by rememberSaveable(campsite.id) {
+                                mutableStateOf<String?>(null)
                             }
 
                             var isLoadingLottery by remember(campsite.id) {
@@ -336,6 +338,10 @@ fun AppNavigation(
                                 mutableStateOf("")
                             }
 
+                            val foundLottery = foundLotteries.firstOrNull {
+                                it.lottery.id == selectedLotteryId
+                            } ?: foundLotteries.firstOrNull()
+
                             val lotteryAction = rememberLotteryAction(
                                 lottery = foundLottery?.lottery,
                                 waitlistCount = foundLottery?.waitlistCount ?: 0,
@@ -346,16 +352,16 @@ fun AppNavigation(
                                 isLoadingLottery = true
                                 lotteryError = ""
 
-                                val listener = lotteryLookupRepository.listenToCampsiteLottery(
+                                val listener = lotteryLookupRepository.listenToCampsiteLotteries(
                                     campsiteId = campsite.id,
                                     onSuccess = { result ->
-                                        foundLottery = result
+                                        foundLotteries = result
                                         isLoadingLottery = false
                                         lotteryError = ""
                                     },
                                     onFailure = { exception ->
                                         Log.e("LotteryLookup", "Failed to load lottery", exception)
-                                        foundLottery = null
+                                        foundLotteries = emptyList()
                                         isLoadingLottery = false
                                         lotteryError =
                                             "Lottery information is unavailable. " +
@@ -405,6 +411,8 @@ fun AppNavigation(
                                         campsite = campsite,
                                         onBack = { navController.popBackStack() },
                                         lottery = foundLottery?.lottery,
+                                        lotteryChoices = foundLotteries.map { it.lottery },
+                                        onSelectLottery = { selectedLotteryId = it },
                                         waitlistCount = lotteryAction.waitlistCount,
                                         lotteryButtonState = lotteryAction.buttonState,
                                         isLotteryActionWorking = lotteryAction.isWorking,
@@ -1045,6 +1053,7 @@ fun AppNavigation(
 
                         CreateLotteryScreen(
                             campsite = campsite,
+                            availableCampsites = ownerCampsites,
                             lotteryId = lotteryId,
                             isSaving = isSaving,
                             errorMessage = errorMessage,
@@ -1060,6 +1069,12 @@ fun AppNavigation(
 
                                             if (navController.currentBackStackEntry == entry) {
                                                 navController.popBackStack()
+                                                if (campsite.id !in lottery.campsiteIds) {
+                                                    val firstCampsiteId = lottery.campsiteIds.first()
+                                                    navController.navigate(
+                                                        "ownerCampsiteDetails/${Uri.encode(firstCampsiteId)}"
+                                                    )
+                                                }
                                             }
                                         },
                                         onFailure = { exception ->

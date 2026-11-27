@@ -2,20 +2,26 @@ package com.charge.reservation.lottery
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,16 +44,18 @@ import java.time.ZoneId
 import java.time.Duration
 import androidx.compose.material3.Button
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
 
 /**
- * Collects lottery settings for one registered campsite.
+ * Collects shared lottery settings for the owner's selected campsites.
  *
  * Publishing requires valid dates and times and a positive whole-number
- * winner count. Dates and times use the displayed time zone. A blank
+ * winner count and at least one campsite. Dates and times use the displayed time zone. A blank
  * waitlist limit means unlimited entries. If supplied, the limit must be
  * a positive whole number. The form keeps its values if saving fails.
  *
- * @param campsite the registered campsite associated with this lottery.
+ * @param campsite the active campsite that opens the form and starts selected.
+ * @param availableCampsites the owner's campsite list used for the picker.
  * @param lotteryId the stable document ID for this lottery.
  * @param isSaving whether a save is in progress. Disables publishing while true.
  * @param errorMessage the save error to display, or an empty string if none.
@@ -57,11 +65,23 @@ import com.charge.reservation.model.Lottery
 @Composable
 fun CreateLotteryScreen(
     campsite: Campsite,
+    availableCampsites: List<Campsite>,
     lotteryId: String,
     isSaving: Boolean,
     errorMessage: String,
     onCreateLottery: (Lottery) -> Unit
 ) {
+    val selectableCampsites = availableCampsites
+        .filter { it.ownerId == campsite.ownerId && !it.removed && it.id.isNotBlank() }
+        .distinctBy { it.id }
+
+    var checkedCampsiteIds by rememberSaveable(lotteryId) {
+        mutableStateOf(arrayListOf(campsite.id))
+    }
+    val selectedCampsiteIds = checkedCampsiteIds.filter { id ->
+        selectableCampsites.any { it.id == id }
+    }
+
     var winnerCountInput by rememberSaveable(campsite.id) {
         mutableStateOf("")
     }
@@ -120,7 +140,37 @@ fun CreateLotteryScreen(
             fontSize = 28.sp
         )
 
-        Text("Campsite: ${campsite.name}")
+        Text("Campsites", style = MaterialTheme.typography.titleMedium)
+
+        for (site in selectableCampsites) {
+            val isSelected = site.id in selectedCampsiteIds
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .toggleable(
+                        value = isSelected,
+                        enabled = !isSaving,
+                        role = Role.Checkbox,
+                        onValueChange = { checked ->
+                            checkedCampsiteIds = ArrayList(
+                                if (checked) checkedCampsiteIds + site.id
+                                else checkedCampsiteIds - site.id
+                            )
+                        }
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                    enabled = !isSaving
+                )
+                Text(site.name)
+            }
+        }
 
         Text("Time zone: $timeZoneId")
 
@@ -320,6 +370,12 @@ fun CreateLotteryScreen(
         val bookingEnd = bookingEndDateMillis
 
         val formError = when {
+            selectedCampsiteIds.isEmpty() ->
+                "Select at least one campsite."
+
+            selectedCampsiteIds.size > MAX_LOTTERY_CAMPSITES ->
+                "Select up to $MAX_LOTTERY_CAMPSITES campsites."
+
             registrationOpensAt == null ->
                 "Select the registration opening date and time."
 
@@ -371,7 +427,7 @@ fun CreateLotteryScreen(
                         Lottery(
                             id = lotteryId,
                             ownerId = campsite.ownerId,
-                            campsiteIds = listOf(campsite.id),
+                            campsiteIds = selectedCampsiteIds,
                             registrationStartAt = registrationOpensAt,
                             registrationEndAt = registrationClosesAt,
                             bookingDeadline = deadlineAt,
