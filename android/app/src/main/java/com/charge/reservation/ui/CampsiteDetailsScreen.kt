@@ -42,6 +42,7 @@ import com.charge.reservation.model.AvailabilityDay
  * @param lotteryActionError error displayed after a failed action
  * @param now device time shared with the join button to display registration status
  * @param onLotteryAction called when the join/leave button is selected
+ * @param onRatingClick called when the average rating is selected, to open the reviews
  */
 @Composable
 fun CampsiteDetailsScreen(
@@ -56,7 +57,8 @@ fun CampsiteDetailsScreen(
     isLoadingAvailability: Boolean = true,
     availabilityError: String = "",
     now: Instant = Instant.now(),
-    onLotteryAction: () -> Unit = {}
+    onLotteryAction: () -> Unit = {},
+    onRatingClick: () -> Unit = {}
 ) {
     val green = Color(0xFF087F5B)
     val grey = Color(0xFF666666)
@@ -155,15 +157,24 @@ fun CampsiteDetailsScreen(
             Text(
                 text = campsite.location,
                 color = grey,
-                fontSize = 14.sp
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f, fill = false)
             )
 
             Text(
-                text = campsite.averageRating?.let {
-                    "★ ${String.format(Locale.US, "%.1f", it)}"
-                } ?: "No ratings yet",
+                text = campsite.averageRating?.let { average ->
+                    val count = if (campsite.ratingCount > 0) {
+                        " (${campsite.ratingCount})"
+                    } else {
+                        ""
+                    }
+                    "★ ${String.format(Locale.US, "%.2f", average)}$count  Reviews ›"
+                } ?: "No ratings yet  Reviews ›",
                 color = Color(0xFF996A00),
-                fontSize = 14.sp
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .clickable(onClickLabel = "View reviews", onClick = onRatingClick)
+                    .padding(start = 8.dp, top = 8.dp, bottom = 8.dp)
             )
         }
 
