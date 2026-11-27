@@ -62,6 +62,7 @@ import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.notifications.NotificationsRoute
 import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 import com.charge.reservation.profile.NotificationSettingsScreen
+import com.charge.reservation.profile.PoliciesScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -74,7 +75,8 @@ import com.charge.reservation.profile.NotificationSettingsScreen
 fun AppNavigation(
     profile: UserProfile,
     onProfileUpdated: (UserProfile) -> Unit,
-    onNotificationPreferenceUpdated: (userId: String, enabled: Boolean) -> Unit
+    onNotificationPreferenceUpdated: (userId: String, enabled: Boolean) -> Unit,
+    onProfileDeleted: () -> Unit
 ) {
     val navController = rememberNavController()
     val currentScreenEntry by navController.currentBackStackEntryAsState()
@@ -509,7 +511,36 @@ fun AppNavigation(
             }
 
             composable("profile") {
+                var isDeletingProfile by remember(profile.id) { mutableStateOf(false) }
+                var deleteProfileError by remember(profile.id) { mutableStateOf("") }
+
                 ProfileMenuScreen(
+                    isDeletingProfile = isDeletingProfile,
+                    deleteProfileError = deleteProfileError,
+                    onDeleteProfileConfirmed = {
+                        if (!isDeletingProfile) {
+                            isDeletingProfile = true
+                            deleteProfileError = ""
+
+                            userProfileRepository.deleteProfile(
+                                userId = profile.id,
+                                onSuccess = {
+                                    isDeletingProfile = false
+                                    onProfileDeleted()
+                                },
+                                onFailure = { exception ->
+                                    Log.e(
+                                        "ProfileDeletion",
+                                        "Could not delete profile",
+                                        exception
+                                    )
+                                    isDeletingProfile = false
+                                    deleteProfileError =
+                                        "Could not delete your profile. Please try again."
+                                }
+                            )
+                        }
+                    },
                     onPersonalInfoClick = {
                         navController.navigate("personalInfo")
                     },
@@ -624,7 +655,7 @@ fun AppNavigation(
             }
 
             composable("policies") {
-                Text("Policy and guidelines, not connected yet")
+                PoliciesScreen()
             }
 
             composable("notifications") {
