@@ -58,6 +58,10 @@ fun BookingsScreen(
         mutableStateOf<String?>(null)
     }
 
+    var showingPastReservations by remember(entrantId) {
+        mutableStateOf(false)
+    }
+
     var retryCount by remember(entrantId) {
         mutableIntStateOf(0)
     }
@@ -104,9 +108,15 @@ fun BookingsScreen(
         }
     }
 
-    // Handle the device Back button while viewing details.
-    BackHandler(enabled = selectedReservationId != null) {
-        selectedReservationId = null
+    BackHandler(
+        enabled = selectedReservationId != null ||
+                showingPastReservations
+    ) {
+        if (selectedReservationId != null) {
+            selectedReservationId = null
+        } else {
+            showingPastReservations = false
+        }
     }
 
     when {
@@ -161,6 +171,20 @@ fun BookingsScreen(
             )
         }
 
+        showingPastReservations -> {
+            PastReservationsScreen(
+                entrantId = entrantId,
+                reservations = reservations,
+                campsiteNames = campsiteNames,
+                onReservationClick = { reservationId ->
+                    selectedReservationId = reservationId
+                },
+                onBackClick = {
+                    showingPastReservations = false
+                }
+            )
+        }
+
         else -> {
             ActiveReservationsScreen(
                 entrantId = entrantId,
@@ -168,6 +192,9 @@ fun BookingsScreen(
                 campsiteNames = campsiteNames,
                 onReservationClick = { reservationId ->
                     selectedReservationId = reservationId
+                },
+                onPastReservationsClick = {
+                    showingPastReservations = true
                 },
                 onBackClick = onBackClick
             )
