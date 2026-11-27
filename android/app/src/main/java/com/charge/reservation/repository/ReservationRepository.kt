@@ -12,12 +12,152 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.charge.reservation.model.Reservation
 import com.charge.reservation.model.ReservationStatus
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
+import com.charge.reservation.reservation.ReservationCancellation
+import java.time.ZoneId
+
 /**
- * Reads reservation records belonging to the signed-in entrant.
+ * Reads reservation records and handles entrant cancellations
+ * while maintaining campsite availability.
  */
 class ReservationRepository {
 
     private val firestore = FirebaseFirestore.getInstance()
+
+    /**
+     * Cancels an entrant's upcoming reservation and restores
+     * the booked guest capacity for each reserved night.
+     *
+     * All changes are performed in one Firestore transaction.
+     *
+     * @param reservationId the reservation to cancel
+     * @param onSuccess called after successful cancellation
+     * @param onFailure receives validation or Firestore errors
+     */
+    fun cancelReservation(
+        reservationId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val entrantId = FirebaseAuth.getInstance().currentUser?.uid
+
+        if (entrantId == null) {
+            onFailure(IllegalStateException("Please sign in first."))
+            return
+        }
+
+        val reservationRef = firestore.collection("reservations")
+            .document(reservationId)
+
+        firestore.runTransaction { transaction ->
+
+            val document = transaction.get(reservationRef)
+
+            if (!document.exists()) {
+                throw IllegalStateException("Reservation not found.")
+            }
+
+            val reservation = Reservation(
+                id = document.id,
+                campsiteId = document.getString("campsiteId") ?: "",
+                lotteryId = document.getString("lotteryId") ?: "",
+                entrantId = document.getString("entrantId") ?: "",
+                checkInDate = ReservationValueParser.parseDate(
+                    document.get("checkInDate")
+                ),
+                checkOutDate = ReservationValueParser.parseDate(
+                    document.get("checkOutDate")
+                ),
+                guestCount = document.getLong("guestCount")?.let {
+                    Math.toIntExact(it)
+                },
+                status = ReservationStatus.valueOf(
+                    requireNotNull(document.getString("status"))
+                )
+            )
+
+            // Use the lottery's timezone, as in the booking process.
+            val lotteryRef = firestore.collection("lotteries")
+                .document(reservation.lotteryId)
+
+            val lottery = transaction.get(lotteryRef)
+
+            val zone = lottery.getString("timeZone")?.let {
+                ZoneId.of(it)
+            } ?: ZoneId.systemDefault()
+
+            if (!ReservationCancellation.canCancel(
+                    reservation, entrantId, LocalDate.now(zone)
+                )
+            ) {
+                throw IllegalStateException(
+                    "This reservation cannot be cancelled."
+                )
+            }
+
+            val nights = ReservationCancellation.bookedNights(
+                requireNotNull(reservation.checkInDate),
+                requireNotNull(reservation.checkOutDate)
+            )
+
+            val guestCount = requireNotNull(reservation.guestCount)
+
+            val availability = firestore.collection("campsites")
+                .document(reservation.campsiteId)
+                .collection("availability")
+
+            val nightRefs = nights.map { date ->
+                availability.document(date.toString())
+            }
+
+            // Validate every night before performing any writes.
+            nightRefs.forEachIndexed { index, reference ->
+
+                val day = transaction.get(reference)
+                val booked = day.getLong("bookedGuests")
+                val capacity = day.getLong("guestCapacity")
+
+                if (!day.exists() ||
+                    day.getString("campsiteId") != reservation.campsiteId ||
+                    ReservationValueParser.parseDate(day.get("date")) != nights[index] ||
+                    booked == null ||
+                    capacity == null ||
+                    booked < guestCount ||
+                    booked > capacity
+                ) {
+                    throw IllegalStateException(
+                        "Unable to restore campsite availability."
+                    )
+                }
+            }
+
+            // Restore the guest capacity for each reserved night.
+            nightRefs.forEach { reference ->
+                transaction.update(
+                    reference,
+                    "bookedGuests",
+                    FieldValue.increment(-guestCount.toLong())
+                )
+            }
+
+            transaction.update(
+                reservationRef,
+                mapOf(
+                    "status" to ReservationStatus.CANCELLED.name,
+                    "statusChangedAt" to FieldValue.serverTimestamp(),
+                    "statusChangeReason" to "Cancelled by entrant"
+                )
+            )
+
+            Unit
+
+        }.addOnSuccessListener {
+            onSuccess()
+        }.addOnFailureListener { exception ->
+            onFailure(exception)
+        }
+    }
 
     /**
      * Listens for Firestore reservations belonging to [entrantId].

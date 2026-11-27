@@ -1,4 +1,3 @@
-
 package com.charge.reservation.reservation
 
 import androidx.activity.compose.BackHandler
@@ -20,16 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import android.util.Log
 
-
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.Reservation
 import com.charge.reservation.repository.ReservationRepository
 
 /**
- * Displays the authenticated entrant's active reservations.
+ * Displays the authenticated entrant's active, past and cancelled reservations.
  *
- * Loads reservations from Firestore and lets the entrant
- * open the details of a selected reservation.
+ * Loads reservations from Firestore and lets the entrant view details,
+ * export CSV files and cancel upcoming reservations.
  */
 @Composable
 fun BookingsScreen(
@@ -58,6 +56,14 @@ fun BookingsScreen(
 
     var selectedReservationId by remember(entrantId) {
         mutableStateOf<String?>(null)
+    }
+
+    var showingPastReservations by remember(entrantId) {
+        mutableStateOf(false)
+    }
+
+    var showingCancelledReservations by remember(entrantId) {
+        mutableStateOf(false)
     }
 
     var retryCount by remember(entrantId) {
@@ -106,9 +112,17 @@ fun BookingsScreen(
         }
     }
 
-    // Handle the device Back button while viewing details.
-    BackHandler(enabled = selectedReservationId != null) {
-        selectedReservationId = null
+    BackHandler(
+        enabled = selectedReservationId != null ||
+                showingPastReservations ||
+                showingCancelledReservations
+    ) {
+        if (selectedReservationId != null) {
+            selectedReservationId = null
+        } else {
+            showingPastReservations = false
+            showingCancelledReservations = false
+        }
     }
 
     when {
@@ -156,8 +170,46 @@ fun BookingsScreen(
                     campsiteNames[reservation.campsiteId]
                         ?: reservation.campsiteId
                 } ?: "Unknown campsite",
+                allowCsvExport = true,
+                entrantId = entrantId,
+                onCancelReservation = { reservationId, onSuccess, onFailure ->
+                    repository.cancelReservation(
+                        reservationId = reservationId,
+                        onSuccess = onSuccess,
+                        onFailure = onFailure
+                    )
+                },
                 onBackClick = {
                     selectedReservationId = null
+                }
+            )
+        }
+
+        showingCancelledReservations -> {
+            PastReservationsScreen(
+                entrantId = entrantId,
+                reservations = reservations,
+                campsiteNames = campsiteNames,
+                onReservationClick = { reservationId ->
+                    selectedReservationId = reservationId
+                },
+                showCancelled = true,
+                onBackClick = {
+                    showingCancelledReservations = false
+                }
+            )
+        }
+
+        showingPastReservations -> {
+            PastReservationsScreen(
+                entrantId = entrantId,
+                reservations = reservations,
+                campsiteNames = campsiteNames,
+                onReservationClick = { reservationId ->
+                    selectedReservationId = reservationId
+                },
+                onBackClick = {
+                    showingPastReservations = false
                 }
             )
         }
@@ -169,6 +221,12 @@ fun BookingsScreen(
                 campsiteNames = campsiteNames,
                 onReservationClick = { reservationId ->
                     selectedReservationId = reservationId
+                },
+                onPastReservationsClick = {
+                    showingPastReservations = true
+                },
+                onCancelledReservationsClick = {
+                    showingCancelledReservations = true
                 },
                 onBackClick = onBackClick
             )
