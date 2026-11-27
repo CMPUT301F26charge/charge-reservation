@@ -1,5 +1,7 @@
 package com.charge.reservation.reservation
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,23 +14,63 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Reservation
+import java.io.IOException
 
 /**
  * Displays the saved details of a selected reservation.
- *
- * Outstanding: Connect this screen to the team's authenticated
- * reservation data source and shared navigation.
+ * Supports CSV export when enabled for the entrant.
  */
 @Composable
 fun ReservationDetailsScreen(
     reservation: Reservation?,
     campsiteName: String,
+    allowCsvExport: Boolean = false,
     onBackClick: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    var exportMessage by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    var pendingCsv by rememberSaveable {
+        mutableStateOf<String?>(null)
+    }
+
+    val csvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val csv = pendingCsv
+                    ?: throw IOException("Missing reservation data.")
+
+                val stream = context.contentResolver.openOutputStream(uri)
+                    ?: throw IOException("Unable to open file.")
+
+                stream.bufferedWriter(Charsets.UTF_8).use {
+                    it.write(csv)
+                }
+
+                exportMessage = "Reservation CSV saved successfully."
+
+            } catch (exception: Exception) {
+                exportMessage = "Unable to save reservation CSV."
+            }
+        }
+
+        pendingCsv = null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -72,5 +114,33 @@ fun ReservationDetailsScreen(
             "Reserved on: " +
                     (reservation.createdAt?.toString() ?: "Not specified")
         )
+
+        if (allowCsvExport) {
+            Button(
+                onClick = {
+                    exportMessage = null
+
+                    pendingCsv = ReservationCsv.generate(
+                        reservation, campsiteName
+                    )
+
+                    try {
+                        csvLauncher.launch(
+                            "reservation-${reservation.id}.csv"
+                        )
+                    } catch (exception: Exception) {
+                        pendingCsv = null
+                        exportMessage = "Unable to open file picker."
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Download CSV")
+            }
+
+            exportMessage?.let {
+                Text(it)
+            }
+        }
     }
 }

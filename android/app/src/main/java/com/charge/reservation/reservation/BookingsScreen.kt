@@ -1,4 +1,3 @@
-
 package com.charge.reservation.reservation
 
 import androidx.activity.compose.BackHandler
@@ -20,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import android.util.Log
 
-
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.Reservation
 import com.charge.reservation.repository.ReservationRepository
@@ -29,7 +27,7 @@ import com.charge.reservation.repository.ReservationRepository
  * Displays the authenticated entrant's active reservations.
  *
  * Loads reservations from Firestore and lets the entrant
- * open the details of a selected reservation.
+ * open the details of a selected reservation and export its CSV.
  */
 @Composable
 fun BookingsScreen(
@@ -156,6 +154,7 @@ fun BookingsScreen(
                     campsiteNames[reservation.campsiteId]
                         ?: reservation.campsiteId
                 } ?: "Unknown campsite",
+                allowCsvExport = true,
                 onBackClick = {
                     selectedReservationId = null
                 }
