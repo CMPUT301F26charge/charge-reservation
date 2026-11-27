@@ -88,46 +88,45 @@ async function drawClosedLottery(db, lotteryId) {
             throw new Error("Invalid configured winner count.");
         }
 
-        // Only WAITING entrants can be selected.
-        // The limit protects this single-transaction implementation
-        // from exceeding Firestore's transaction write limits.
+            // Draw from every entrant who is still waiting when the transaction runs.
         const waitingQuery = db
             .collection("lotteryParticipations")
             .where("lotteryId", "==", lotteryId)
-            .where("status", "==", "WAITING")
-            .limit(201);
+            .where("status", "==", "WAITING");
 
         const waitingSnap = await transaction.get(waitingQuery);
-
-        if (waitingSnap.size > 200) {
-            throw new Error(
-                "More than 200 waiting entrants. " +
-                "A larger-scale draw strategy is required."
-            );
-        }
-
-        const entrantIds = waitingSnap.docs.map(
-            (doc) => doc.get("entrantId")
-        );
-
-        const winners = selectWinners(
-            entrantIds,
-            winnerCount
-        );
-
+        const entrantIds = waitingSnap.docs.map((doc) => doc.get("entrantId"));
+        const winners = selectWinners(entrantIds, winnerCount);
         const winnerSet = new Set(winners);
 
-        // No writes occur until all reads finish.
+        // Read preferences before updating any results.
+        const profileRefs = entrantIds.map((id) => db.collection("users").doc(id));
+        const profiles = profileRefs.length === 0
+            ? []
+            : await transaction.getAll(...profileRefs, {
+                fieldMask: ["notificationEnabled", "removed"]
+            });
+        const alertRecipients = new Set(
+            profiles
+                .filter((profile) =>
+                    profile.exists &&
+                    profile.get("removed") !== true &&
+                    profile.get("notificationEnabled") !== false
+                )
+                .map((profile) => profile.id)
+        );
 
         for (const participantDoc of waitingSnap.docs) {
             const entrantId = participantDoc.get("entrantId");
             const selected = winnerSet.has(entrantId);
-
             const status = selected ? "INVITED" : "NOT_SELECTED";
 
-            transaction.update(participantDoc.ref, {
-                status
-            });
+            transaction.update(participantDoc.ref, { status });
+
+            if (!alertRecipients.has(entrantId)) {
+                continue;
+            }
+
 
             const notificationRef = db
                 .collection("notifications")

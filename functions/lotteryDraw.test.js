@@ -55,7 +55,7 @@ test("winners are not always selected in input order", () => {
 });
 
 
-function createFakeFirestore() {
+function createFakeFirestore(entrantIds = ["A", "B"]) {
     const lotteryId = "test-lottery";
     const lotteryData = {
         registrationEndAt: {
@@ -63,14 +63,15 @@ function createFakeFirestore() {
         },
         winnerCount: 1,
         drawCompletedAt: null,
-        waitlistCount: 2
+        waitlistCount: entrantIds.length
     };
 
-    const participants = [
-        { id: "participant-A", entrantId: "A", status: "WAITING" },
-        { id: "participant-B", entrantId: "B", status: "WAITING" }
-    ];
-
+    const participants = entrantIds.map((entrantId) => ({
+        id: `participant-${entrantId}`,
+        entrantId,
+        status: "WAITING"
+    }));
+    const profiles = new Map(entrantIds.map((id) => [id, {}]));
     const notifications = new Map();
 
     const lotteryRef = {
@@ -139,6 +140,15 @@ function createFakeFirestore() {
                     };
                 },
 
+                async getAll(...referencesAndOptions) {
+                    assert.equal(writes.length, 0);
+                    return referencesAndOptions.slice(0, -1).map(({ id }) => ({
+                        id,
+                        exists: profiles.has(id),
+                        get: (field) => profiles.get(id)?.[field]
+                    }));
+                },
+                
                 update(reference, data) {
                     writes.push({ type: "update", reference, data });
                 },
@@ -165,7 +175,7 @@ function createFakeFirestore() {
         }
     };
 
-    return { db, lotteryId, lotteryData, participants, notifications };
+    return { db, lotteryId, lotteryData, participants, profiles, notifications };
 }
 
 test("creates one notification for each lottery result", async () => {
@@ -225,4 +235,32 @@ test("drawing an already completed lottery creates no duplicates", async () => {
     assert.equal(secondResult.status, "already_completed");
     assert.equal(fake.notifications.size, 2);
     assert.deepEqual(fake.notifications, firstNotifications);
+});
+
+test("saves results for opted-out entrants without sending them alerts", async () => {
+    const fake = createFakeFirestore();
+    fake.profiles.set("A", { notificationEnabled: false });
+
+    await drawClosedLottery(fake.db, fake.lotteryId);
+
+    assert.ok(fake.participants.every(({ status }) =>
+        status === "INVITED" || status === "NOT_SELECTED"
+    ));
+    assert.equal(fake.notifications.has("lottery-result-participant-A"), false);
+    assert.equal(fake.notifications.has("lottery-result-participant-B"), true);
+});
+
+test("completes a draw with 251 waiting entrants", async () => {
+    const entrantIds = Array.from({ length: 251 }, (_, index) => `entrant-${index}`);
+    const fake = createFakeFirestore(entrantIds);
+
+    const result = await drawClosedLottery(fake.db, fake.lotteryId);
+
+    assert.equal(result.status, "completed");
+    assert.equal(result.totalEntrants, 251);
+    assert.equal(fake.participants.filter(({ status }) => status === "INVITED").length, 1);
+    assert.equal(fake.participants.filter(({ status }) => status === "NOT_SELECTED").length, 250);
+    assert.equal(fake.notifications.size, 251);
+    assert.equal(fake.lotteryData.waitlistCount, 0);
+    assert.ok(fake.lotteryData.drawCompletedAt instanceof Date);
 });
