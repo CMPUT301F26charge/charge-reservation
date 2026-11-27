@@ -24,10 +24,10 @@ import com.charge.reservation.model.Reservation
 import com.charge.reservation.repository.ReservationRepository
 
 /**
- * Displays the authenticated entrant's active reservations.
+ * Displays the authenticated entrant's active and past reservations.
  *
  * Loads reservations from Firestore and lets the entrant
- * open the details of a selected reservation and export its CSV.
+ * view details, export CSV files and cancel upcoming reservations.
  */
 @Composable
 fun BookingsScreen(
@@ -165,6 +165,14 @@ fun BookingsScreen(
                         ?: reservation.campsiteId
                 } ?: "Unknown campsite",
                 allowCsvExport = true,
+                entrantId = entrantId,
+                onCancelReservation = { reservationId, onSuccess, onFailure ->
+                    repository.cancelReservation(
+                        reservationId = reservationId,
+                        onSuccess = onSuccess,
+                        onFailure = onFailure
+                    )
+                },
                 onBackClick = {
                     selectedReservationId = null
                 }
