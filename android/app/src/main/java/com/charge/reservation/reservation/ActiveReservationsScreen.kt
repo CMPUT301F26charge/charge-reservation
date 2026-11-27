@@ -35,6 +35,7 @@ fun ActiveReservationsScreen(
     campsiteNames: Map<String, String>,
     onReservationClick: (String) -> Unit,
     today: LocalDate = LocalDate.now(),
+    onPastReservationsClick: (() -> Unit)? = null,
     onBackClick: () -> Unit
 ) {
     val activeReservations = ActiveReservationFilter.filter(
@@ -59,6 +60,12 @@ fun ActiveReservationsScreen(
             text = "My Active Reservations",
             fontSize = 26.sp
         )
+
+        if (onPastReservationsClick != null) {
+            Button(onClick = onPastReservationsClick) {
+                Text("View Past Reservations")
+            }
+        }
 
         if (activeReservations.isEmpty()) {
             Text("You have no active reservations.")
