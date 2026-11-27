@@ -10,6 +10,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,7 +39,9 @@ import com.charge.reservation.model.AvailabilityDay
  * Shows campsite details, availability, policies, and the lottery entry button.
  * @param campsite selected campsite
  * @param onBack returns to campsite browsing
- * @param lottery associated lottery, if available
+ * @param lottery the selected lottery whose settings and join action are shown.
+ * @param lotteryChoices all lottery listings linked to the campsite.
+ * @param onSelectLottery receives the ID chosen by the entrant.
  * @param waitlistCount current number of waitlisted entrants
  * @param lotteryButtonState controls the join or leave action.
  * @param isLotteryActionWorking whether a lottery action is running
@@ -56,7 +62,9 @@ fun CampsiteDetailsScreen(
     isLoadingAvailability: Boolean = true,
     availabilityError: String = "",
     now: Instant = Instant.now(),
-    onLotteryAction: () -> Unit = {}
+    onLotteryAction: () -> Unit = {},
+    lotteryChoices: List<Lottery> = emptyList(),
+    onSelectLottery: (String) -> Unit = {}
 ) {
     val green = Color(0xFF087F5B)
     val grey = Color(0xFF666666)
@@ -308,6 +316,43 @@ fun CampsiteDetailsScreen(
             fontWeight = FontWeight.Bold,
             fontSize = 17.sp
         )
+
+        if (lottery != null && lotteryChoices.size > 1) {
+            var showLotteryChoices by remember(campsite.id) { mutableStateOf(false) }
+
+            Box {
+                OutlinedButton(
+                    onClick = { showLotteryChoices = true },
+                    enabled = !isLotteryActionWorking
+                ) {
+                    Text("Choose lottery (LOT-${lottery.id.take(6).uppercase()})")
+                }
+
+                DropdownMenu(
+                    expanded = showLotteryChoices,
+                    onDismissRequest = { showLotteryChoices = false }
+                ) {
+                    for (choice in lotteryChoices) {
+                        val code = "LOT-${choice.id.take(6).uppercase()}"
+                        val start = choice.bookingStartDate
+                        val end = choice.bookingEndDate
+                        val label = if (start != null && end != null) {
+                            "$code · $start to $end"
+                        } else {
+                            code
+                        }
+
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                showLotteryChoices = false
+                                onSelectLottery(choice.id)
+                            }
+                        )
+                    }
+                }
+            }
+        }
 
         if (lottery == null) {
             Text("No lottery available for this campsite.", color = grey)

@@ -4,6 +4,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** Maximum sites an owner can publish in one lottery using Firestore rules. */
+const val MAX_LOTTERY_CAMPSITES = 9
+
 /**
  * Represents a lottery through which selected entrants can reserve a campsite.
  *
@@ -12,7 +15,7 @@ import java.time.ZoneId
  *
  * @property id the ID of the lottery
  * @property ownerId the ID of the owner managing the lottery
- * @property campsiteIds the IDs of campsites included in the lottery
+ * @property campsiteIds the distinct IDs of campsites included in the lottery
  * @property registrationStartAt the instant when registration opens
  * @property registrationEndAt the instant when registration closes
  * @property bookingDeadline the instant by which winners must use their invitation

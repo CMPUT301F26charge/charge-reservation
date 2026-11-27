@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 import com.charge.reservation.model.Lottery
+import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
@@ -25,12 +26,13 @@ class LotteryRepository {
     }
 
     /**
-     * Creates a lottery for one active campsite belonging to its owner.
+     * Publishes one lottery for the selected active campsites of the same owner.
      *
-     * Validates the required configuration and saves it in a transaction.
+     * Validates the shared settings and checks each campsite in the transaction
+     * that saves the lottery.
      * An existing lottery with the same ID is never overwritten.
      *
-     * @param lottery the configuration to validate and save.
+     * @param lottery the configuration with distinct campsite IDs and shared settings.
      * @param onSuccess called after the lottery is successfully saved.
      * @param onFailure receives validation, ownership, duplicate ID or
      * Firestore errors. A failed save does not report success.
@@ -48,13 +50,15 @@ class LotteryRepository {
                 "Owner ID is missing."
             }
 
-            val campsiteId = requireNotNull(
-                lottery.campsiteIds.singleOrNull()
-            ) {
-                "Select exactly one campsite."
+            val campsiteIds = lottery.campsiteIds.toList()
+            require(campsiteIds.size in 1..MAX_LOTTERY_CAMPSITES) {
+                "Select between 1 and $MAX_LOTTERY_CAMPSITES campsites."
             }
-            require(campsiteId.isNotBlank()) {
-                "Campsite ID is missing."
+            require(campsiteIds.none { it.isBlank() || '/' in it }) {
+                "A selected campsite has an invalid ID."
+            }
+            require(campsiteIds.toSet().size == campsiteIds.size) {
+                "Select each campsite only once."
             }
 
             val opens = requireNotNull(lottery.registrationStartAt) {
@@ -108,13 +112,10 @@ class LotteryRepository {
             val lotteryDocument = firestore.collection("lotteries")
                 .document(lottery.id)
 
-            val campsiteDocument = firestore.collection("campsites")
-                .document(campsiteId)
-
             val lotteryData = mapOf<String, Any?>(
                 "id" to lottery.id,
                 "ownerId" to lottery.ownerId,
-                "campsiteIds" to listOf(campsiteId),
+                "campsiteIds" to campsiteIds,
                 "registrationStartAt" to Timestamp(
                     opens.epochSecond, opens.nano
                 ),
@@ -135,18 +136,22 @@ class LotteryRepository {
 
             firestore.runTransaction { transaction ->
                 val existingLottery = transaction.get(lotteryDocument)
-                val campsite = transaction.get(campsiteDocument)
 
                 check(!existingLottery.exists()) {
                     "A lottery already exists with this ID."
                 }
 
-                require(
-                    campsite.exists() &&
-                            campsite.getString("ownerId") == lottery.ownerId &&
-                            campsite.getBoolean("removed") == false
-                ) {
-                    "Select an active campsite belonging to this owner."
+                for (campsiteId in campsiteIds) {
+                    val campsite = transaction.get(
+                        firestore.collection("campsites").document(campsiteId)
+                    )
+                    require(
+                        campsite.exists() &&
+                                campsite.getString("ownerId") == lottery.ownerId &&
+                                campsite.getBoolean("removed") == false
+                    ) {
+                        "All selected campsites must be active and belong to this owner."
+                    }
                 }
 
                 transaction.set(lotteryDocument, lotteryData)
