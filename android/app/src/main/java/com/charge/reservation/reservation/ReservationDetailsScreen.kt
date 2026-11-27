@@ -8,10 +8,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,16 +25,32 @@ import com.charge.reservation.model.Reservation
 
 /**
  * Displays the saved details of a selected reservation.
- *
- * Outstanding: Connect this screen to the team's authenticated
- * reservation data source and shared navigation.
+ * Allows entrants to cancel their own upcoming reservations.
  */
 @Composable
 fun ReservationDetailsScreen(
     reservation: Reservation?,
     campsiteName: String,
+    entrantId: String = "",
+    onCancelReservation: ((String, () -> Unit, (Exception) -> Unit) -> Unit)? = null,
     onBackClick: () -> Unit
 ) {
+    var showConfirmation by remember(reservation?.id) {
+        mutableStateOf(false)
+    }
+
+    var cancelling by remember(reservation?.id) {
+        mutableStateOf(false)
+    }
+
+    var cancellationSuccessful by remember(reservation?.id) {
+        mutableStateOf(false)
+    }
+
+    var cancellationMessage by remember(reservation?.id) {
+        mutableStateOf<String?>(null)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -72,5 +94,77 @@ fun ReservationDetailsScreen(
             "Reserved on: " +
                     (reservation.createdAt?.toString() ?: "Not specified")
         )
+
+        if (onCancelReservation != null &&
+            ReservationCancellation.canCancel(reservation, entrantId) &&
+            !cancellationSuccessful
+        ) {
+            Button(
+                onClick = { showConfirmation = true },
+                enabled = !cancelling,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (cancelling) "Cancelling..."
+                    else "Cancel Reservation"
+                )
+            }
+
+            if (showConfirmation) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showConfirmation = false
+                    },
+                    title = {
+                        Text("Cancel Reservation?")
+                    },
+                    text = {
+                        Text(
+                            "Are you sure you want to cancel this reservation? " +
+                                    "This action cannot be undone."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showConfirmation = false
+                                cancelling = true
+                                cancellationMessage = null
+
+                                onCancelReservation(
+                                    reservation.id,
+                                    {
+                                        cancelling = false
+                                        cancellationSuccessful = true
+                                        cancellationMessage =
+                                            "Reservation cancelled successfully."
+                                    },
+                                    {
+                                        cancelling = false
+                                        cancellationMessage =
+                                            "Unable to cancel reservation."
+                                    }
+                                )
+                            }
+                        ) {
+                            Text("Confirm Cancellation")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                showConfirmation = false
+                            }
+                        ) {
+                            Text("Keep Reservation")
+                        }
+                    }
+                )
+            }
+        }
+
+        cancellationMessage?.let {
+            Text(it)
+        }
     }
 }

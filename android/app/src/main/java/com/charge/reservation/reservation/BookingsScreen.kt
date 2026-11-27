@@ -29,7 +29,7 @@ import com.charge.reservation.repository.ReservationRepository
  * Displays the authenticated entrant's active reservations.
  *
  * Loads reservations from Firestore and lets the entrant
- * open the details of a selected reservation.
+ * view reservation details and cancel upcoming reservations.
  */
 @Composable
 fun BookingsScreen(
@@ -156,12 +156,19 @@ fun BookingsScreen(
                     campsiteNames[reservation.campsiteId]
                         ?: reservation.campsiteId
                 } ?: "Unknown campsite",
+                entrantId = entrantId,
+                onCancelReservation = { reservationId, onSuccess, onFailure ->
+                    repository.cancelReservation(
+                        reservationId = reservationId,
+                        onSuccess = onSuccess,
+                        onFailure = onFailure
+                    )
+                },
                 onBackClick = {
                     selectedReservationId = null
                 }
             )
         }
-
         else -> {
             ActiveReservationsScreen(
                 entrantId = entrantId,
