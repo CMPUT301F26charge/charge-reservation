@@ -88,7 +88,7 @@ async function drawClosedLottery(db, lotteryId) {
             throw new Error("Invalid configured winner count.");
         }
 
-            // Draw from every entrant who is still waiting when the transaction runs.
+        // Draw from entrants who are still waiting and have an active entrant profile.
         const waitingQuery = db
             .collection("lotteryParticipations")
             .where("lotteryId", "==", lotteryId)
@@ -96,37 +96,42 @@ async function drawClosedLottery(db, lotteryId) {
 
         const waitingSnap = await transaction.get(waitingQuery);
         const entrantIds = waitingSnap.docs.map((doc) => doc.get("entrantId"));
-        const winners = selectWinners(entrantIds, winnerCount);
-        const winnerSet = new Set(winners);
-
-        // Read preferences before updating any results.
         const profileRefs = entrantIds.map((id) => db.collection("users").doc(id));
         const profiles = profileRefs.length === 0
             ? []
             : await transaction.getAll(...profileRefs, {
-                fieldMask: ["notificationEnabled", "removed"]
+                fieldMask: ["isEntrant", "removed", "notificationEnabled"]
             });
-        const alertRecipients = new Set(
+
+        const eligibleProfiles = new Map(
             profiles
                 .filter((profile) =>
                     profile.exists &&
                     profile.get("removed") !== true &&
-                    profile.get("notificationEnabled") !== false
+                    profile.get("isEntrant") !== false
                 )
-                .map((profile) => profile.id)
+                .map((profile) => [profile.id, profile])
         );
+        const winners = selectWinners([...eligibleProfiles.keys()], winnerCount);
+        const winnerSet = new Set(winners);
 
         for (const participantDoc of waitingSnap.docs) {
             const entrantId = participantDoc.get("entrantId");
-            const selected = winnerSet.has(entrantId);
-            const status = selected ? "INVITED" : "NOT_SELECTED";
+            const profile = eligibleProfiles.get(entrantId);
 
-            transaction.update(participantDoc.ref, { status });
-
-            if (!alertRecipients.has(entrantId)) {
+            if (!profile) {
+                transaction.update(participantDoc.ref, { status: "CANCELLED" });
                 continue;
             }
 
+            const selected = winnerSet.has(entrantId);
+            const status = selected ? "INVITED" : "NOT_SELECTED";
+            transaction.update(participantDoc.ref, { status });
+
+            // Notification opt-out affects only whether an alert is created.
+            if (profile.get("notificationEnabled") === false) {
+                continue;
+            }
 
             const notificationRef = db
                 .collection("notifications")

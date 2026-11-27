@@ -264,3 +264,20 @@ test("completes a draw with 251 waiting entrants", async () => {
     assert.equal(fake.lotteryData.waitlistCount, 0);
     assert.ok(fake.lotteryData.drawCompletedAt instanceof Date);
 });
+
+test("only active entrants can win, including entrants who opted out", async () => {
+    const fake = createFakeFirestore(["deleted", "removed", "non-entrant", "opted-out"]);
+    fake.profiles.delete("deleted");
+    fake.profiles.set("removed", { removed: true });
+    fake.profiles.set("non-entrant", { isEntrant: false });
+    fake.profiles.set("opted-out", { isEntrant: true, notificationEnabled: false });
+
+    const result = await drawClosedLottery(fake.db, fake.lotteryId);
+
+    assert.deepEqual(result.winnerIds, ["opted-out"]);
+    assert.deepEqual(
+        fake.participants.map(({ status }) => status),
+        ["CANCELLED", "CANCELLED", "CANCELLED", "INVITED"]
+    );
+    assert.equal(fake.notifications.size, 0);
+});
