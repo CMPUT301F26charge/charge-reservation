@@ -36,3 +36,6 @@ render.experimental.xml
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Firebase Functions dependencies
+/functions/node_modules/
