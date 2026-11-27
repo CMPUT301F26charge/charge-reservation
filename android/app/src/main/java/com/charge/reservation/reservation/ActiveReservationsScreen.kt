@@ -1,4 +1,3 @@
-
 package com.charge.reservation.reservation
 
 import androidx.compose.foundation.clickable
@@ -24,9 +23,8 @@ import java.time.LocalDate
  * Displays the entrant's confirmed upcoming and ongoing reservations.
  *
  * Cancelled, rejected, completed, and other entrants'
- * reservations are excluded.
- *
- * Outstanding: Connect to authenticated reservation data.
+ * reservations are excluded from the active list.
+ * Provides navigation to past and cancelled reservations.
  */
 @Composable
 fun ActiveReservationsScreen(
@@ -36,6 +34,7 @@ fun ActiveReservationsScreen(
     onReservationClick: (String) -> Unit,
     today: LocalDate = LocalDate.now(),
     onPastReservationsClick: (() -> Unit)? = null,
+    onCancelledReservationsClick: (() -> Unit)? = null,
     onBackClick: () -> Unit
 ) {
     val activeReservations = ActiveReservationFilter.filter(
@@ -51,7 +50,6 @@ fun ActiveReservationsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ADDED: Back navigation
         Button(onClick = onBackClick) {
             Text("Back")
         }
@@ -64,6 +62,12 @@ fun ActiveReservationsScreen(
         if (onPastReservationsClick != null) {
             Button(onClick = onPastReservationsClick) {
                 Text("View Past Reservations")
+            }
+        }
+
+        if (onCancelledReservationsClick != null) {
+            Button(onClick = onCancelledReservationsClick) {
+                Text("View Cancelled Reservations")
             }
         }
 

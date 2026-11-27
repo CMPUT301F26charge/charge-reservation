@@ -17,11 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Reservation
+import com.charge.reservation.model.ReservationStatus
 import java.time.LocalDate
 
 /**
- * Displays the entrant's completed reservations and allows
- * them to open the details of a previous stay.
+ * Displays the entrant's completed or cancelled reservations and allows
+ * them to open the details of a previous reservation.
  */
 @Composable
 fun PastReservationsScreen(
@@ -30,13 +31,21 @@ fun PastReservationsScreen(
     campsiteNames: Map<String, String>,
     onReservationClick: (String) -> Unit,
     today: LocalDate = LocalDate.now(),
+    showCancelled: Boolean = false,
     onBackClick: () -> Unit
 ) {
-    val pastReservations = PastReservationFilter.filter(
-        reservations = reservations,
-        entrantId = entrantId,
-        today = today
-    )
+    val pastReservations = if (showCancelled) {
+        reservations.filter {
+            it.entrantId == entrantId &&
+                    it.status == ReservationStatus.CANCELLED
+        }
+    } else {
+        PastReservationFilter.filter(
+            reservations = reservations,
+            entrantId = entrantId,
+            today = today
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -50,12 +59,16 @@ fun PastReservationsScreen(
         }
 
         Text(
-            text = "My Past Reservations",
+            text = if (showCancelled) "My Cancelled Reservations"
+                   else "My Past Reservations",
             fontSize = 26.sp
         )
 
         if (pastReservations.isEmpty()) {
-            Text("You have no past reservations.")
+            Text(
+                if (showCancelled) "You have no cancelled reservations."
+                else "You have no past reservations."
+            )
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -86,6 +99,10 @@ fun PastReservationsScreen(
                             Text("Reservation: ${reservation.id}")
                             Text("Check-in: ${reservation.checkInDate}")
                             Text("Check-out: ${reservation.checkOutDate}")
+
+                            if (showCancelled) {
+                                Text("Status: ${reservation.status}")
+                            }
                         }
                     }
                 }

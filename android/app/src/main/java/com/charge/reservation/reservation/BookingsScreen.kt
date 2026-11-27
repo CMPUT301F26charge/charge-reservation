@@ -24,10 +24,10 @@ import com.charge.reservation.model.Reservation
 import com.charge.reservation.repository.ReservationRepository
 
 /**
- * Displays the authenticated entrant's active and past reservations.
+ * Displays the authenticated entrant's active, past and cancelled reservations.
  *
- * Loads reservations from Firestore and lets the entrant
- * view details, export CSV files and cancel upcoming reservations.
+ * Loads reservations from Firestore and lets the entrant view details,
+ * export CSV files and cancel upcoming reservations.
  */
 @Composable
 fun BookingsScreen(
@@ -59,6 +59,10 @@ fun BookingsScreen(
     }
 
     var showingPastReservations by remember(entrantId) {
+        mutableStateOf(false)
+    }
+
+    var showingCancelledReservations by remember(entrantId) {
         mutableStateOf(false)
     }
 
@@ -110,12 +114,14 @@ fun BookingsScreen(
 
     BackHandler(
         enabled = selectedReservationId != null ||
-                showingPastReservations
+                showingPastReservations ||
+                showingCancelledReservations
     ) {
         if (selectedReservationId != null) {
             selectedReservationId = null
         } else {
             showingPastReservations = false
+            showingCancelledReservations = false
         }
     }
 
@@ -179,6 +185,21 @@ fun BookingsScreen(
             )
         }
 
+        showingCancelledReservations -> {
+            PastReservationsScreen(
+                entrantId = entrantId,
+                reservations = reservations,
+                campsiteNames = campsiteNames,
+                onReservationClick = { reservationId ->
+                    selectedReservationId = reservationId
+                },
+                showCancelled = true,
+                onBackClick = {
+                    showingCancelledReservations = false
+                }
+            )
+        }
+
         showingPastReservations -> {
             PastReservationsScreen(
                 entrantId = entrantId,
@@ -203,6 +224,9 @@ fun BookingsScreen(
                 },
                 onPastReservationsClick = {
                     showingPastReservations = true
+                },
+                onCancelledReservationsClick = {
+                    showingCancelledReservations = true
                 },
                 onBackClick = onBackClick
             )

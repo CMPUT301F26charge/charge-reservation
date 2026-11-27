@@ -26,11 +26,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.charge.reservation.model.Reservation
+import com.charge.reservation.model.ReservationStatus
 import java.io.IOException
 
 /**
  * Displays the saved details of a selected reservation.
- * Supports CSV export and cancellation of upcoming reservations.
+ * Supports CSV export, cancellation of upcoming reservations,
+ * and downloading cancellation confirmations.
  */
 @Composable
 fun ReservationDetailsScreen(
@@ -158,6 +160,35 @@ fun ReservationDetailsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Download CSV")
+            }
+
+            if (reservation.status == ReservationStatus.CANCELLED &&
+                reservation.statusChangedAt != null
+            ) {
+                Text("Cancelled on: ${reservation.statusChangedAt}")
+
+                Button(
+                    onClick = {
+                        exportMessage = null
+
+                        try {
+                            pendingCsv = ReservationCsv.generateCancellation(
+                                reservation, campsiteName
+                            )
+
+                            csvLauncher.launch(
+                                "cancellation-${reservation.id}.csv"
+                            )
+                        } catch (exception: Exception) {
+                            pendingCsv = null
+                            exportMessage =
+                                "Unable to download cancellation confirmation."
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Download Cancellation Confirmation")
+                }
             }
 
             exportMessage?.let {
