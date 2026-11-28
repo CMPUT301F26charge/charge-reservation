@@ -1,13 +1,11 @@
 
 const { setGlobalOptions } = require("firebase-functions");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 
 const { drawClosedLottery } = require("./lotteryDraw");
-const sharedLotteries = require("./sharedLotteries");
 
 if (getApps().length === 0) {
     initializeApp();
@@ -15,18 +13,6 @@ if (getApps().length === 0) {
 
 setGlobalOptions({
     maxInstances: 1
-});
-
-/** Returns a single-use invitation code to the lottery creator. */
-exports.createSharedLotteryInvitation = onCall((request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to invite an owner.");
-    return sharedLotteries.createInvitation(getFirestore(), request.auth.uid, request.data);
-});
-
-/** Adds one active campsite owned by the authenticated invited owner. */
-exports.acceptSharedLotteryInvitation = onCall((request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to join a shared lottery.");
-    return sharedLotteries.acceptInvitation(getFirestore(), request.auth.uid, request.data);
 });
 
 /**
