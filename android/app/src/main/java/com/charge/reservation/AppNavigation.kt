@@ -65,6 +65,8 @@ import com.charge.reservation.profile.NotificationSettingsScreen
 import com.charge.reservation.profile.PoliciesScreen
 import com.charge.reservation.review.CreateReviewScreen
 import com.charge.reservation.review.ReviewsScreen
+import com.charge.reservation.notifications.CreateNotificationScreen
+import com.charge.reservation.notifications.SentNotificationsScreen
 
 /**
  * Connects role navigation with campsite and lottery repository operations.
@@ -92,6 +94,8 @@ fun AppNavigation(
         "lotteryNotification/{lotteryId}",
         "personalInfo",
         "notifications",
+        "sentNotifications",
+        "createNotification",
         "notificationSettings",
         "messages",
         "policies",
@@ -725,8 +729,72 @@ fun AppNavigation(
                     onOpenLottery = { lotteryId ->
                         navController.navigate("lotteryNotification/${Uri.encode(lotteryId)}")
                     },
-                    navController = navController
+                    navController = navController,
+                    // Only shown while the user is acting as an owner.
+                    onSentNotificationsClick =
+                        if (activeRole == "Owner" && profile.isOwner && !profile.removed) {
+                            { navController.navigate("sentNotifications") }
+                        } else {
+                            null
+                        }
                 )
+            }
+
+            composable("sentNotifications") {
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can view sent notifications.")
+                    }
+
+                    isLoadingOwnerCampsites -> CircularProgressIndicator()
+
+                    ownerCampsitesError.isNotEmpty() -> {
+                        Column {
+                            Text(ownerCampsitesError)
+                            Button(onClick = { ownerListRetry++ }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+
+                    else -> SentNotificationsScreen(
+                        ownerId = profile.id,
+                        campsites = ownerCampsites,
+                        onCreateNotificationClick = {
+                            navController.navigate("createNotification")
+                        }
+                    )
+                }
+            }
+
+            composable("createNotification") { entry ->
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can send notifications.")
+                    }
+
+                    isLoadingOwnerCampsites -> CircularProgressIndicator()
+
+                    ownerCampsitesError.isNotEmpty() -> {
+                        Column {
+                            Text(ownerCampsitesError)
+                            Button(onClick = { ownerListRetry++ }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+
+                    else -> CreateNotificationScreen(
+                        ownerId = profile.id,
+                        campsites = ownerCampsites,
+                        onNotificationSent = {
+                            // Return to the sent list only if this form is still open.
+                            if (navController.currentBackStackEntry == entry) {
+                                navController.popBackStack()
+                            }
+                        }
+                    )
+                }
             }
 
             composable("adminCampsites") {

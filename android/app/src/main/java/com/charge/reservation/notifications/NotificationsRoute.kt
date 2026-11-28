@@ -14,12 +14,15 @@ import androidx.navigation.NavController
  * @param userId the signed-in user's id (UserProfile.id, the Firebase Auth UID)
  * @param onOpenLottery called with the lottery id when a lottery notification's
  * "View lottery" button is tapped
+ * @param onSentNotificationsClick opens the owner's sent notifications, or null
+ * to hide the button
  */
 @Composable
 fun NotificationsRoute(
     userId: String?,
     onOpenLottery: (String) -> Unit,
     navController: NavController,
+    onSentNotificationsClick: (() -> Unit)? = null,
     vm: NotificationsViewModel = viewModel()
 ) {
     LaunchedEffect(userId) { vm.setUser(userId) }
@@ -28,6 +31,7 @@ fun NotificationsRoute(
     NotificationsScreen(
         notifications = notifications,
         onOpenLottery = onOpenLottery,
-        navController = navController
+        navController = navController,
+        onSentNotificationsClick = onSentNotificationsClick
     )
 }

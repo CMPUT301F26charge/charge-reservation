@@ -16,6 +16,8 @@ import java.time.Instant
  * @property reservationId the ID of the related reservation, or null if not applicable
  * @property campsiteId the ID of the related campsite, or null if not applicable
  * @property sendStatus the current sending state for this recipient
+ * @property announcementId the ID shared by every recipient's copy of the same
+ * owner announcement, or null for system notifications
  */
 data class Notification (
     val id: String = "",
@@ -27,5 +29,6 @@ data class Notification (
     val lotteryId: String? = null,
     val reservationId: String? = null,
     val campsiteId: String? = null,
-    val sendStatus: NotificationSendStatus = NotificationSendStatus.PENDING
+    val sendStatus: NotificationSendStatus = NotificationSendStatus.PENDING,
+    val announcementId: String? = null
 )

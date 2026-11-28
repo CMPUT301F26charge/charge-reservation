@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,13 +30,16 @@ import com.charge.reservation.model.NotificationType
  * @param notifications the notifications to show, newest first
  * @param onOpenLottery called with the lottery id when a lottery notification's
  * "View lottery" button is tapped
+ * @param onSentNotificationsClick opens the owner's sent notifications, or null
+ * to hide the button for users not acting as an owner
  */
 @Composable
 fun NotificationsScreen(
     notifications: List<Notification>,
     onOpenLottery: (String) -> Unit,
     roleLabel: String = "",
-    @Suppress("UNUSED_PARAMETER") navController: NavController
+    @Suppress("UNUSED_PARAMETER") navController: NavController,
+    onSentNotificationsClick: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (roleLabel.isNotBlank()) {
@@ -45,6 +49,17 @@ fun NotificationsScreen(
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
+        }
+
+        if (onSentNotificationsClick != null) {
+            OutlinedButton(
+                onClick = onSentNotificationsClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+            ) {
+                Text("Sent notifications")
+            }
         }
 
         LazyColumn(
