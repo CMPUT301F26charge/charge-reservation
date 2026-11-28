@@ -37,6 +37,7 @@ import com.charge.reservation.model.AvailabilityDay
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.ui.CampsiteCard
+import com.charge.reservation.qr.ScanCampsiteQrButton
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -44,11 +45,14 @@ import java.time.temporal.ChronoUnit
  * Shows the searchable campsite list and combined filters.
  * @param navController navigation controller for the entrant flow
  * @param onCampsiteClick called when an entrant selects a campsite
+ * @param onCampsiteQrScanned opens the campsite ID read from a QR code.
+ * Pass null when scanning is unavailable for the signed-in user.
  */
 @Composable
 fun ExploreCampsitesScreen(
     navController: NavController,
-    onCampsiteClick: (Campsite) -> Unit
+    onCampsiteClick: (Campsite) -> Unit,
+    onCampsiteQrScanned: ((String) -> Unit)? = null
 ) {
     val repository = remember { CampsiteRepository() }
 
@@ -161,6 +165,10 @@ fun ExploreCampsitesScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (onCampsiteQrScanned != null) {
+            ScanCampsiteQrButton(onCampsiteQrScanned)
+        }
 
         OutlinedTextField(
             value = searchText,
