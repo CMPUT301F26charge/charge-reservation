@@ -7,10 +7,11 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.Source
-import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 
 /**
- * Loads, publishes, and updates owner lotteries.
+ * Loads, publishes, and updates owner lotteries and handles shared lottery invitations.
  */
 class LotteryRepository {
     private val firestore = FirebaseFirestore.getInstance()
@@ -307,34 +308,66 @@ class LotteryRepository {
     )
 
     /**
-     * Requests a single-use share code for a lottery created by the signed-in owner.
+     * Creates a single-use invitation for a lottery owned by the signed-in user.
      *
-     * @param lotteryId the lottery to share.
-     * @param onSuccess receives the invitation code.
-     * @param onFailure receives a validation or Firebase error.
+     * @param lotteryId the undrawn lottery to share.
+     * @param onSuccess receives the code after Firestore saves the invitation.
+     * @param onFailure receives validation, permission, or Firestore errors.
      */
     fun createSharedLotteryInvitation(
         lotteryId: String,
         onSuccess: (String) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
-        FirebaseFunctions.getInstance().getHttpsCallable("createSharedLotteryInvitation")
-            .call(mapOf("lotteryId" to lotteryId))
-            .addOnSuccessListener { result ->
-                val code = (result.data as? Map<*, *>)?.get("code") as? String
-                if (code == null) onFailure(IllegalStateException("The invite code could not be read."))
-                else onSuccess(code)
+        val ownerId = FirebaseAuth.getInstance().currentUser?.uid
+        if (ownerId == null) {
+            onFailure(IllegalStateException("Sign in to invite an owner."))
+            return
+        }
+        if (lotteryId.isBlank() || '/' in lotteryId || lotteryId in listOf(".", "..")) {
+            onFailure(IllegalArgumentException("The lottery ID is invalid."))
+            return
+        }
+
+        val lotteryRef = firestore.collection("lotteries").document(lotteryId)
+        val invitationRef = firestore.collection("lotteryOwnerInvitations").document()
+
+        firestore.runTransaction { transaction ->
+            val lottery = transaction.get(lotteryRef)
+            require(lottery.exists() && lottery.getString("ownerId") == ownerId) {
+                "Only the lottery creator can invite owners."
             }
-            .addOnFailureListener { onFailure(it) }
+            require(lottery.get("drawCompletedAt") == null) {
+                "This lottery has already been drawn."
+            }
+
+            val campsiteIds = lottery.get("campsiteIds") as? List<*>
+            require(!campsiteIds.isNullOrEmpty()) {
+                "This lottery's campsite list is unavailable."
+            }
+            require(campsiteIds.size < MAX_LOTTERY_CAMPSITES) {
+                "This lottery already has $MAX_LOTTERY_CAMPSITES campsites."
+            }
+
+            transaction.set(
+                invitationRef,
+                mapOf("lotteryId" to lotteryId, "creatorId" to ownerId)
+            )
+            Unit
+        }
+            .addOnSuccessListener { onSuccess(invitationRef.id) }
+            .addOnFailureListener { error ->
+                onFailure(error.cause as? IllegalArgumentException ?: error)
+            }
     }
 
     /**
-     * Redeems a code by adding one of the signed-in owner's active campsites.
+     * Redeems a code and adds one active campsite owned by the signed-in user.
      *
-     * @param code the invitation code shared by the creator.
-     * @param campsiteId the campsite to contribute.
-     * @param onSuccess runs after the campsite is added.
-     * @param onFailure receives a validation or Firebase error.
+     * @param code the invitation code shared by the lottery creator.
+     * @param campsiteId the owner's selected campsite.
+     * @param onSuccess runs after both writes commit, or after a retry of the same redemption.
+     * @param onFailure receives validation, permission, or Firestore errors.
      */
     fun acceptSharedLotteryInvitation(
         code: String,
@@ -342,9 +375,73 @@ class LotteryRepository {
         onSuccess: () -> Unit,
         onFailure: (Exception) -> Unit
     ) {
-        FirebaseFunctions.getInstance().getHttpsCallable("acceptSharedLotteryInvitation")
-            .call(mapOf("code" to code, "campsiteId" to campsiteId))
+        val ownerId = FirebaseAuth.getInstance().currentUser?.uid
+        if (ownerId == null) {
+            onFailure(IllegalStateException("Sign in to join a shared lottery."))
+            return
+        }
+
+        val invitationId = code.trim()
+        if (!invitationId.matches(Regex("[A-Za-z0-9]{20}"))) {
+            onFailure(IllegalArgumentException("Enter a valid invitation code."))
+            return
+        }
+        if (campsiteId.isBlank() || '/' in campsiteId || campsiteId in listOf(".", "..")) {
+            onFailure(IllegalArgumentException("Choose a valid campsite."))
+            return
+        }
+
+        val invitationRef = firestore.collection("lotteryOwnerInvitations").document(invitationId)
+        val campsiteRef = firestore.collection("campsites").document(campsiteId)
+
+        firestore.runTransaction { transaction ->
+            val invitation = transaction.get(invitationRef)
+            require(invitation.exists()) { "That invitation code could not be found." }
+            require(invitation.getString("creatorId") != ownerId) {
+                "Use Edit lottery to add your own campsites."
+            }
+
+            val campsite = transaction.get(campsiteRef)
+            require(
+                campsite.exists() &&
+                        campsite.getString("ownerId") == ownerId &&
+                        campsite.getBoolean("removed") == false
+            ) {
+                "Choose one of your own active campsites."
+            }
+
+            val acceptedBy = invitation.getString("acceptedBy")
+            if (acceptedBy != null) {
+                require(acceptedBy == ownerId && invitation.getString("campsiteId") == campsiteId) {
+                    "That invitation code has already been used."
+                }
+                return@runTransaction Unit
+            }
+
+            val lotteryId = requireNotNull(invitation.getString("lotteryId")) {
+                "This invitation no longer points to a lottery."
+            }
+            val lotteryRef = firestore.collection("lotteries").document(lotteryId)
+
+            // Firestore rules check the latest lottery state when both writes commit.
+            transaction.update(
+                lotteryRef,
+                mapOf(
+                    "campsiteIds" to FieldValue.arrayUnion(campsiteId),
+                    "contributedCampsiteIds" to FieldValue.arrayUnion(campsiteId),
+                    "contributingOwnerIds" to FieldValue.arrayUnion(ownerId),
+                    "lastAcceptedInvitationId" to invitationId
+                )
+            )
+            transaction.update(
+                invitationRef,
+                mapOf("acceptedBy" to ownerId, "campsiteId" to campsiteId)
+            )
+            Unit
+        }
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { onFailure(it) }
+            .addOnFailureListener { error ->
+                onFailure(error.cause as? IllegalArgumentException ?: error)
+            }
     }
 }
