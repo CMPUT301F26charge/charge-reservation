@@ -64,6 +64,8 @@ import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
 import com.charge.reservation.profile.NotificationSettingsScreen
 import com.charge.reservation.profile.PoliciesScreen
 
+private const val LOTTERY_FORM_ROUTE = "createLottery/{campsiteId}?lotteryId={lotteryId}"
+
 /**
  * Connects role navigation with profile, campsite, lottery, and booking screens.
  *
@@ -85,7 +87,7 @@ fun AppNavigation(
         "ownerLotteryEntrants/{lotteryId}",
         "ownerBookedDates/{campsiteId}",
         "createCampsite",
-        "createLottery/{campsiteId}",
+        LOTTERY_FORM_ROUTE,
         "lotteryNotification/{lotteryId}",
         "personalInfo",
         "notifications",
@@ -934,6 +936,14 @@ fun AppNavigation(
                                     "ownerLotteryEntrants/${Uri.encode(lotteryId)}"
                                 )
                             },
+                            onEditLotteryClick = { lotteryId ->
+                                if (campsite != null) {
+                                    navController.navigate(
+                                        "createLottery/${Uri.encode(campsite.id)}" +
+                                                "?lotteryId=${Uri.encode(lotteryId)}"
+                                    )
+                                }
+                            },
                             onCreateLotteryClick = {
                                 if (campsite != null) {
                                     navController.navigate(
@@ -1006,8 +1016,19 @@ fun AppNavigation(
                 }
             }
 
-            composable("createLottery/{campsiteId}") { entry ->
+            composable(
+                route = LOTTERY_FORM_ROUTE,
+                arguments = listOf(
+                    navArgument("campsiteId") { type = NavType.StringType },
+                    navArgument("lotteryId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
+            ) { entry ->
                 val campsiteId = entry.arguments?.getString("campsiteId")
+                val editingLotteryId = entry.arguments?.getString("lotteryId")
 
                 val campsite = ownerCampsites.find {
                     it.id == campsiteId &&
@@ -1017,7 +1038,7 @@ fun AppNavigation(
 
                 when {
                     !profile.isOwner || profile.removed -> {
-                        Text("Only campsite owners can create lotteries.")
+                        Text("Only campsite owners can publish or edit lotteries.")
                     }
 
                     isLoadingOwnerCampsites -> {
@@ -1039,17 +1060,68 @@ fun AppNavigation(
                     }
 
                     else -> {
-                        val lotteryId = rememberSaveable(profile.id, campsite.id) {
-                            lotteryRepository.generateLotteryId()
+                        val lotteryId = rememberSaveable(profile.id, campsite.id, editingLotteryId) {
+                            editingLotteryId ?: lotteryRepository.generateLotteryId()
                         }
 
-                        var isSaving by remember(campsite.id) {
+                        var savedLottery by remember(lotteryId, profile.id) {
+                            mutableStateOf<Lottery?>(null)
+                        }
+                        var loadError by remember(lotteryId, profile.id) { mutableStateOf("") }
+                        var loadAttempt by remember(lotteryId, profile.id) { mutableStateOf(0) }
+
+                        if (editingLotteryId != null) {
+                            DisposableEffect(editingLotteryId, profile.id, loadAttempt) {
+                                var active = true
+                                loadError = ""
+                                lotteryRepository.getOwnerLottery(
+                                    lotteryId = editingLotteryId,
+                                    ownerId = profile.id,
+                                    onSuccess = { lottery ->
+                                        if (active) savedLottery = lottery
+                                    },
+                                    onFailure = { exception ->
+                                        if (active) {
+                                            Log.e("LotteryEdit", "Cannot load lottery", exception)
+                                            loadError = lotteryErrorMessage(
+                                                exception,
+                                                "Could not load the lottery. Try again."
+                                            )
+                                        }
+                                    }
+                                )
+                                onDispose { active = false }
+                            }
+
+                            if (loadError.isNotEmpty()) {
+                                Column {
+                                    Text(loadError)
+                                    Button(onClick = { loadAttempt++ }) { Text("Retry") }
+                                }
+                                return@composable
+                            }
+                            if (savedLottery == null) {
+                                CircularProgressIndicator()
+                                return@composable
+                            }
+                            if (savedLottery?.drawCompletedAt != null) {
+                                Text("This lottery has already been drawn and can no longer be edited.")
+                                return@composable
+                            }
+                        }
+
+                        var isSaving by remember(lotteryId) {
                             mutableStateOf(false)
                         }
 
-                        var errorMessage by remember(campsite.id) {
+                        var errorMessage by remember(lotteryId) {
                             mutableStateOf("")
                         }
+
+                        val isEditing = editingLotteryId != null
+                        val saveLottery: (Lottery, () -> Unit, (Exception) -> Unit) -> Unit =
+                            if (isEditing) lotteryRepository::updateLottery
+                            else lotteryRepository::createLottery
 
                         CreateLotteryScreen(
                             campsite = campsite,
@@ -1057,14 +1129,15 @@ fun AppNavigation(
                             lotteryId = lotteryId,
                             isSaving = isSaving,
                             errorMessage = errorMessage,
+                            savedLottery = savedLottery,
                             onCreateLottery = { lottery ->
                                 if (!isSaving) {
                                     isSaving = true
                                     errorMessage = ""
 
-                                    lotteryRepository.createLottery(
-                                        lottery = lottery,
-                                        onSuccess = {
+                                    saveLottery(
+                                        lottery,
+                                        {
                                             isSaving = false
 
                                             if (navController.currentBackStackEntry == entry) {
@@ -1077,21 +1150,19 @@ fun AppNavigation(
                                                 }
                                             }
                                         },
-                                        onFailure = { exception ->
+                                        { exception ->
                                             Log.e(
-                                                "LotteryCreation",
-                                                "Cannot publish lottery",
+                                                "LotteryForm",
+                                                "Cannot save lottery",
                                                 exception
                                             )
 
                                             isSaving = false
-                                            errorMessage =
-                                                if (exception is IllegalArgumentException) {
-                                                    exception.message
-                                                        ?: "Please check the lottery details."
-                                                } else {
-                                                    "Cannot publish lottery. Please try again."
-                                                }
+                                            errorMessage = lotteryErrorMessage(
+                                                exception,
+                                                if (isEditing) "Cannot save changes. Please try again."
+                                                else "Cannot publish lottery. Please try again."
+                                            )
                                         }
                                     )
                                 }
@@ -1155,3 +1226,9 @@ fun AppNavigation(
         }
     }
 }
+
+/** Finds a validation message even when Firestore wraps a transaction failure. */
+private fun lotteryErrorMessage(exception: Exception, fallback: String): String =
+    generateSequence<Throwable>(exception) { it.cause }
+        .filterIsInstance<IllegalArgumentException>()
+        .firstOrNull()?.message ?: fallback

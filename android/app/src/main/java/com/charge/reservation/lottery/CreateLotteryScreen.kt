@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.AlertDialog
@@ -41,25 +42,26 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.Duration
 import androidx.compose.material3.Button
 import com.charge.reservation.model.Lottery
 import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
 
 /**
- * Collects shared lottery settings for the owner's selected campsites.
+ * Collects shared lottery settings for publishing or editing an owner's lottery.
  *
- * Publishing requires valid dates and times and a positive whole-number
- * winner count and at least one campsite. Dates and times use the displayed time zone. A blank
- * waitlist limit means unlimited entries. If supplied, the limit must be
- * a positive whole number. The form keeps its values if saving fails.
+ * Both modes use the same date, campsite, and count validation. Editing starts
+ * with the saved settings and uses the lottery's saved time zone. A blank
+ * waitlist limit means unlimited entries. The form keeps values on save failure.
  *
- * @param campsite the active campsite that opens the form and starts selected.
+ * @param campsite the active campsite that opens the form and starts selected on creation.
  * @param availableCampsites the owner's campsite list used for the picker.
  * @param lotteryId the stable document ID for this lottery.
- * @param isSaving whether a save is in progress. Disables publishing while true.
+ * @param isSaving whether a save is in progress. Disables submission while true.
  * @param errorMessage the save error to display, or an empty string if none.
- * @param onCreateLottery receives the validated lottery when Publish is pressed.
+ * @param savedLottery the initial settings for editing, or null for creation.
+ * @param onCreateLottery receives the validated lottery to publish or update.
  * The caller saves it and handles the result.
  */
 @Composable
@@ -69,61 +71,67 @@ fun CreateLotteryScreen(
     lotteryId: String,
     isSaving: Boolean,
     errorMessage: String,
+    savedLottery: Lottery? = null,
     onCreateLottery: (Lottery) -> Unit
 ) {
+    val isEditing = savedLottery != null
     val selectableCampsites = availableCampsites
         .filter { it.ownerId == campsite.ownerId && !it.removed && it.id.isNotBlank() }
         .distinctBy { it.id }
 
     var checkedCampsiteIds by rememberSaveable(lotteryId) {
-        mutableStateOf(arrayListOf(campsite.id))
+        mutableStateOf(ArrayList(savedLottery?.campsiteIds ?: listOf(campsite.id)))
     }
     val selectedCampsiteIds = checkedCampsiteIds.filter { id ->
         selectableCampsites.any { it.id == id }
     }
 
-    var winnerCountInput by rememberSaveable(campsite.id) {
-        mutableStateOf("")
+    val timeZoneId = rememberSaveable(lotteryId) {
+        savedLottery?.timeZone?.id ?: ZoneId.systemDefault().id
+    }
+    val timeZone = ZoneId.of(timeZoneId)
+    val savedOpening = savedLottery?.registrationStartAt?.atZone(timeZone)
+    val savedClosing = savedLottery?.registrationEndAt?.atZone(timeZone)
+    val savedDeadline = savedLottery?.bookingDeadline?.atZone(timeZone)
+
+    var winnerCountInput by rememberSaveable(lotteryId) {
+        mutableStateOf(savedLottery?.winnerCount?.toString().orEmpty())
     }
 
-    var waitlistCapacityInput by rememberSaveable(campsite.id) {
-        mutableStateOf("")
+    var waitlistCapacityInput by rememberSaveable(lotteryId) {
+        mutableStateOf(savedLottery?.waitlistCapacity?.toString().orEmpty())
     }
 
-    var registrationStartDateMillis by rememberSaveable(campsite.id) {
-        mutableStateOf<Long?>(null)
+    var registrationStartDateMillis by rememberSaveable(lotteryId) {
+        mutableStateOf(savedOpening?.toLocalDate()?.toPickerMillis())
     }
 
-    var registrationEndDateMillis by rememberSaveable(campsite.id) {
-        mutableStateOf<Long?>(null)
+    var registrationEndDateMillis by rememberSaveable(lotteryId) {
+        mutableStateOf(savedClosing?.toLocalDate()?.toPickerMillis())
     }
 
-    var registrationStartMinutes by rememberSaveable(campsite.id) {
-        mutableStateOf<Int?>(null)
+    var registrationStartMinutes by rememberSaveable(lotteryId) {
+        mutableStateOf(savedOpening?.minutesOfDay())
     }
 
-    var registrationEndMinutes by rememberSaveable(campsite.id) {
-        mutableStateOf<Int?>(null)
+    var registrationEndMinutes by rememberSaveable(lotteryId) {
+        mutableStateOf(savedClosing?.minutesOfDay())
     }
 
-    val timeZoneId = rememberSaveable(campsite.id) {
-        ZoneId.systemDefault().id
+    var bookingStartDateMillis by rememberSaveable(lotteryId) {
+        mutableStateOf(savedLottery?.bookingStartDate?.toPickerMillis())
     }
 
-    var bookingStartDateMillis by rememberSaveable(campsite.id) {
-        mutableStateOf<Long?>(null)
+    var bookingEndDateMillis by rememberSaveable(lotteryId) {
+        mutableStateOf(savedLottery?.bookingEndDate?.toPickerMillis())
     }
 
-    var bookingEndDateMillis by rememberSaveable(campsite.id) {
-        mutableStateOf<Long?>(null)
+    var bookingDeadlineDateMillis by rememberSaveable(lotteryId) {
+        mutableStateOf(savedDeadline?.toLocalDate()?.toPickerMillis())
     }
 
-    var bookingDeadlineDateMillis by rememberSaveable(campsite.id) {
-        mutableStateOf<Long?>(null)
-    }
-
-    var bookingDeadlineMinutes by rememberSaveable(campsite.id) {
-        mutableStateOf<Int?>(null)
+    var bookingDeadlineMinutes by rememberSaveable(lotteryId) {
+        mutableStateOf(savedDeadline?.minutesOfDay())
     }
 
     val oneDayMillis = Duration.ofDays(1).toMillis()
@@ -136,7 +144,7 @@ fun CreateLotteryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Create lottery",
+            text = if (isEditing) "Edit lottery" else "Create lottery",
             fontSize = 28.sp
         )
 
@@ -214,15 +222,22 @@ fun CreateLotteryScreen(
             onTimeSelected = { registrationEndMinutes = it }
         )
 
-        val openingMinutes = registrationStartMinutes
-        val closingMinutes = registrationEndMinutes
+        val registrationOpensAt = lotteryDateTimeInstant(
+            registrationStartDateMillis,
+            registrationStartMinutes,
+            timeZone,
+            savedOpening
+        )
+        val registrationClosesAt = lotteryDateTimeInstant(
+            registrationEndDateMillis,
+            registrationEndMinutes,
+            timeZone,
+            savedClosing
+        )
 
         if (
-            registrationStartDateMillis != null &&
-            registrationStartDateMillis == registrationEndDateMillis &&
-            openingMinutes != null &&
-            closingMinutes != null &&
-            closingMinutes <= openingMinutes
+            registrationOpensAt != null && registrationClosesAt != null &&
+            !registrationClosesAt.isAfter(registrationOpensAt)
         ) {
             Text(
                 text = "Closing time must be after opening time.",
@@ -250,22 +265,17 @@ fun CreateLotteryScreen(
             onTimeSelected = { bookingDeadlineMinutes = it }
         )
 
-        val registrationClosesAt = lotteryDateTimeInstant(
-            registrationEndDateMillis,
-            registrationEndMinutes,
-            timeZoneId
-        )
-
         val deadlineAt = lotteryDateTimeInstant(
             bookingDeadlineDateMillis,
             bookingDeadlineMinutes,
-            timeZoneId
+            timeZone,
+            savedDeadline
         )
 
         val bookingBeginsAt = lotteryDateTimeInstant(
             bookingStartDateMillis,
             0,
-            timeZoneId
+            timeZone
         )
 
         val deadlineError = when {
@@ -360,12 +370,6 @@ fun CreateLotteryScreen(
         )
 
 
-        val registrationOpensAt = lotteryDateTimeInstant(
-            registrationStartDateMillis,
-            registrationStartMinutes,
-            timeZoneId
-        )
-
         val bookingStart = bookingStartDateMillis
         val bookingEnd = bookingEndDateMillis
 
@@ -437,7 +441,7 @@ fun CreateLotteryScreen(
                             bookingEndDate = Instant.ofEpochMilli(
                                 requireNotNull(bookingEnd)
                             ).atZone(ZoneOffset.UTC).toLocalDate(),
-                            timeZone = ZoneId.of(timeZoneId),
+                            timeZone = timeZone,
                             waitlistCapacity = waitlistCapacity,
                             winnerCount = winnerCount
                         )
@@ -446,16 +450,29 @@ fun CreateLotteryScreen(
             }
         ) {
             Text(
-                if (isSaving) "Publishing..." else "Publish lottery"
+                when {
+                    isSaving && isEditing -> "Saving..."
+                    isSaving -> "Publishing..."
+                    isEditing -> "Save changes"
+                    else -> "Publish lottery"
+                }
             )
         }
     }
 }
 
+/** Compose date pickers encode a calendar date as UTC midnight. */
+private fun LocalDate.toPickerMillis(): Long =
+    atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun ZonedDateTime.minutesOfDay(): Int = hour * 60 + minute
+
+/** Keeps saved precision and the offset during a repeated local hour if unchanged. */
 private fun lotteryDateTimeInstant(
     dateMillis: Long?,
     minutes: Int?,
-    timeZoneId: String
+    timeZone: ZoneId,
+    original: ZonedDateTime? = null
 ): Instant? {
     if (dateMillis == null || minutes == null) {
         return null
@@ -465,8 +482,12 @@ private fun lotteryDateTimeInstant(
         .atZone(ZoneOffset.UTC)
         .toLocalDate()
 
+    if (original != null && original.toLocalDate() == date && original.minutesOfDay() == minutes) {
+        return original.toInstant()
+    }
+
     return date.atTime(minutes / 60, minutes % 60)
-        .atZone(ZoneId.of(timeZoneId))
+        .atZone(timeZone)
         .toInstant()
 }
 

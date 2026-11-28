@@ -1,6 +1,7 @@
 package com.charge.reservation
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -8,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.charge.reservation.lottery.CreateLotteryScreen
 import com.charge.reservation.model.Campsite
@@ -18,8 +20,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
-/** Tests the owner campsite picker and entrant lottery picker for US 02.04.02. */
+/** Tests owner lottery creation and editing, and entrant lottery selection. */
 @RunWith(AndroidJUnit4::class)
 class LotteryCampsiteSelectionTest {
     @get:Rule
@@ -60,6 +65,52 @@ class LotteryCampsiteSelectionTest {
 
         riverOption.performClick()
         riverOption.assertIsOff()
+    }
+
+    @Test
+    fun editingLotteryPrefillsSavedSettingsAndSubmitsChangesWithTheSameId() {
+        val pine = Campsite(id = "pine", ownerId = "owner-1", name = "Pine Lake")
+        val river = Campsite(id = "river", ownerId = "owner-1", name = "River Camp")
+        val saved = Lottery(
+            id = "lottery-1",
+            ownerId = pine.ownerId,
+            campsiteIds = listOf(pine.id, river.id),
+            registrationStartAt = Instant.parse("2027-06-02T01:30:25Z"),
+            registrationEndAt = Instant.parse("2027-06-04T01:30:00Z"),
+            bookingDeadline = Instant.parse("2027-06-05T02:45:30Z"),
+            bookingStartDate = LocalDate.of(2027, 6, 5),
+            bookingEndDate = LocalDate.of(2027, 6, 7),
+            timeZone = ZoneId.of("America/Edmonton"),
+            winnerCount = 2,
+            waitlistCapacity = 12
+        )
+        var submitted: Lottery? = null
+
+        composeRule.setContent {
+            ChargeReservationTheme {
+                CreateLotteryScreen(
+                    campsite = pine,
+                    availableCampsites = listOf(pine, river),
+                    lotteryId = saved.id,
+                    isSaving = false,
+                    errorMessage = "",
+                    savedLottery = saved,
+                    onCreateLottery = { submitted = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Edit lottery").assertExists()
+        composeRule.onNodeWithText("Pine Lake").assertIsOn()
+        composeRule.onNodeWithText("River Camp").assertIsOn().performClick()
+        composeRule.onNodeWithText("Registration opens: 2027-06-01").assertExists()
+        composeRule.onNodeWithText("Opening time: 19:30").assertExists()
+        composeRule.onNodeWithText("Number of winners").performScrollTo().performTextReplacement("3")
+        composeRule.onNodeWithText("Save changes").performScrollTo().assertIsEnabled().performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(saved.copy(campsiteIds = listOf(pine.id), winnerCount = 3), submitted)
+        }
     }
 
     @Test

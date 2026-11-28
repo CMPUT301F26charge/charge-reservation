@@ -393,6 +393,7 @@ fun CampsiteDetailsScreen(
                         (lottery.bookingDeadline?.let(dateTimeFormat::format) ?: "Not set"),
                 color = grey
             )
+            Text("Number of winners: ${lottery.winnerCount ?: "Not set"}", color = grey)
             Text(
                 "Waitlist: $waitlistCount" +
                         (lottery.waitlistCapacity?.let { " / $it" } ?: " (no limit)"),
