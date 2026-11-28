@@ -282,6 +282,13 @@ fun AppNavigation(
                         navController.navigate(
                             "entrantCampsiteDetails/${Uri.encode(campsite.id)}"
                         )
+                    },
+                    onCampsiteQrScanned = if (profile.isEntrant && !profile.removed) {
+                        { campsiteId ->
+                            navController.navigate("entrantCampsiteDetails/${Uri.encode(campsiteId)}")
+                        }
+                    } else {
+                        null
                     }
                 )
             }
@@ -318,7 +325,12 @@ fun AppNavigation(
                 when {
                     isLoadingCampsite -> CircularProgressIndicator()
                     campsiteError.isNotEmpty() -> Text("Could not load campsite: $campsiteError")
-                    selectedCampsite == null -> Text("Campsite not found.")
+                    selectedCampsite == null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("This campsite is unavailable.")
+                        TextButton(onClick = { navController.popBackStack() }) {
+                            Text("Back to campsites")
+                        }
+                    }
                     else -> {
                         selectedCampsite?.let { campsite ->
                             var foundLotteries by remember(campsite.id) {

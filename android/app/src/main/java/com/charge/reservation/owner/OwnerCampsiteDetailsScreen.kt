@@ -35,6 +35,7 @@ import kotlinx.coroutines.isActive
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
 
+import com.charge.reservation.qr.CampsiteQrButton
 
 /**
  * Displays saved campsite details, availability and lottery configuration.
@@ -105,6 +106,8 @@ fun OwnerCampsiteDetailsScreen(
         Button(onClick = onEditCampsiteClick) {
             Text("Edit campsite")
         }
+
+        CampsiteQrButton(campsite)
 
         Button(onClick = onViewBookedDatesClick) {
             Text("View booked dates")
