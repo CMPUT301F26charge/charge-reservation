@@ -1,15 +1,13 @@
 package com.charge.reservation.repository
 
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-
 import com.charge.reservation.booking.toLottery
 import com.charge.reservation.model.Lottery
 import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Filter
 import com.google.firebase.firestore.Source
+import com.google.firebase.functions.FirebaseFunctions
 
 /**
  * Loads, publishes, and updates owner lotteries.
@@ -48,9 +46,9 @@ class LotteryRepository {
      * Saves new settings for an undrawn lottery owned by [Lottery.ownerId].
      *
      * Uses the latest draw state and waitlist count in the transaction. Keeps
-     * the same lottery ID, owner, time zone, and participation records.
+     * the same lottery ID, owner, time zone, contributions, and participation records.
      *
-     * @param lottery the updated campsite IDs and settings.
+     * @param lottery the updated settings and the creator's selected campsite IDs.
      * @param onSuccess called after the update commits.
      * @param onFailure receives validation or Firestore errors.
      */
@@ -194,7 +192,12 @@ class LotteryRepository {
                 }
 
                 if (isUpdate) {
-                    transaction.update(lotteryDocument, settings)
+                    val contributions = existingLottery.toLottery().contributedCampsiteIds
+                    val includedCampsites = (campsiteIds + contributions).distinct()
+                    require(includedCampsites.size <= MAX_LOTTERY_CAMPSITES) {
+                        "Select up to $MAX_LOTTERY_CAMPSITES campsites, including contributions."
+                    }
+                    transaction.update(lotteryDocument, settings + ("campsiteIds" to includedCampsites))
                 } else {
                     transaction.set(
                         lotteryDocument,
@@ -252,109 +255,96 @@ class LotteryRepository {
     }
 
     /**
-     * Loads saved lotteries for the selected owner's campsite.
+     * Loads the lotteries created by an owner or containing a campsite they contributed.
      *
-     * @param ownerId the current owner's Firebase Authentication UID.
-     * @param campsiteId the campsite whose lotteries should be returned.
-     * @param onSuccess receives matching lotteries, newest registration first.
+     * @param ownerId the signed-in owner's Firebase Authentication UID.
+     * @param onSuccess receives the lotteries, newest registration first.
      * @param onFailure receives Firestore or stored data conversion errors.
+     */
+    fun getOwnerLotteries(
+        ownerId: String,
+        onSuccess: (List<Lottery>) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        firestore.collection("lotteries")
+            .where(
+                Filter.or(
+                    Filter.equalTo("ownerId", ownerId),
+                    Filter.arrayContains("contributingOwnerIds", ownerId)
+                )
+            )
+            .get(Source.SERVER)
+            .addOnSuccessListener { snapshot ->
+                val lotteries = try {
+                    snapshot.documents.map { it.toLottery() }
+                        .sortedByDescending { it.registrationStartAt }
+                } catch (exception: Exception) {
+                    onFailure(exception)
+                    return@addOnSuccessListener
+                }
+                onSuccess(lotteries)
+            }
+            .addOnFailureListener { onFailure(it) }
+    }
+
+    /**
+     * Loads the shared and created lotteries that include the current campsite.
+     *
+     * @param ownerId the signed-in owner's Firebase Authentication UID.
+     * @param campsiteId filters the results to lotteries containing this campsite.
+     * @param onSuccess receives the matching lotteries.
+     * @param onFailure receives load or conversion errors.
      */
     fun getOwnerCampsiteLotteries(
         ownerId: String,
         campsiteId: String,
         onSuccess: (List<Lottery>) -> Unit,
         onFailure: (Exception) -> Unit
+    ) = getOwnerLotteries(
+        ownerId,
+        onSuccess = { lotteries -> onSuccess(lotteries.filter { campsiteId in it.campsiteIds }) },
+        onFailure = onFailure
+    )
+
+    /**
+     * Requests a single-use share code for a lottery created by the signed-in owner.
+     *
+     * @param lotteryId the lottery to share.
+     * @param onSuccess receives the invitation code.
+     * @param onFailure receives a validation or Firebase error.
+     */
+    fun createSharedLotteryInvitation(
+        lotteryId: String,
+        onSuccess: (String) -> Unit,
+        onFailure: (Exception) -> Unit
     ) {
-        firestore.collection("lotteries")
-            .whereEqualTo("ownerId", ownerId)
-            .get(Source.SERVER)
-            .addOnSuccessListener { snapshot ->
-                val lotteries = try {
-                    val result = mutableListOf<Lottery>()
-
-                    for (document in snapshot.documents) {
-                        val campsiteIds =
-                            (document.get("campsiteIds") as List<*>)
-                                .map { it as String }
-
-                        if (campsiteId !in campsiteIds) {
-                            continue
-                        }
-
-                        result.add(
-                            Lottery(
-                                id = document.id,
-                                ownerId = requireNotNull(
-                                    document.getString("ownerId")
-                                ),
-                                campsiteIds = campsiteIds,
-                                registrationStartAt = timestampToInstant(
-                                    requireNotNull(
-                                        document.getTimestamp("registrationStartAt")
-                                    )
-                                ),
-                                registrationEndAt = timestampToInstant(
-                                    requireNotNull(
-                                        document.getTimestamp("registrationEndAt")
-                                    )
-                                ),
-                                bookingDeadline = timestampToInstant(
-                                    requireNotNull(
-                                        document.getTimestamp("bookingDeadline")
-                                    )
-                                ),
-                                bookingStartDate = LocalDate.parse(
-                                    requireNotNull(
-                                        document.getString("bookingStartDate")
-                                    )
-                                ),
-                                bookingEndDate = LocalDate.parse(
-                                    requireNotNull(
-                                        document.getString("bookingEndDate")
-                                    )
-                                ),
-                                timeZone = ZoneId.of(
-                                    requireNotNull(
-                                        document.getString("timeZone")
-                                    )
-                                ),
-                                winnerCount = Math.toIntExact(
-                                    requireNotNull(
-                                        document.getLong("winnerCount")
-                                    )
-                                ),
-                                waitlistCapacity =
-                                    document.getLong("waitlistCapacity")?.let {
-                                        Math.toIntExact(it)
-                                    },
-                                drawCompletedAt =
-                                    document.getTimestamp("drawCompletedAt")?.let {
-                                        timestampToInstant(it)
-                                    }
-                            )
-                        )
-                    }
-
-                    result.sortedByDescending { it.registrationStartAt }
-                } catch (exception: Exception) {
-                    onFailure(exception)
-                    return@addOnSuccessListener
-                }
-
-                onSuccess(lotteries)
+        FirebaseFunctions.getInstance().getHttpsCallable("createSharedLotteryInvitation")
+            .call(mapOf("lotteryId" to lotteryId))
+            .addOnSuccessListener { result ->
+                val code = (result.data as? Map<*, *>)?.get("code") as? String
+                if (code == null) onFailure(IllegalStateException("The invite code could not be read."))
+                else onSuccess(code)
             }
-            .addOnFailureListener { exception ->
-                onFailure(exception)
-            }
+            .addOnFailureListener { onFailure(it) }
     }
 
     /**
-     * Converts a saved Firebase timestamp into an Instant.
+     * Redeems a code by adding one of the signed-in owner's active campsites.
+     *
+     * @param code the invitation code shared by the creator.
+     * @param campsiteId the campsite to contribute.
+     * @param onSuccess runs after the campsite is added.
+     * @param onFailure receives a validation or Firebase error.
      */
-    private fun timestampToInstant(timestamp: Timestamp): Instant {
-        return Instant.ofEpochSecond(
-            timestamp.seconds,
-            timestamp.nanoseconds.toLong()
-        )
+    fun acceptSharedLotteryInvitation(
+        code: String,
+        campsiteId: String,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        FirebaseFunctions.getInstance().getHttpsCallable("acceptSharedLotteryInvitation")
+            .call(mapOf("code" to code, "campsiteId" to campsiteId))
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { onFailure(it) }
     }
 }

@@ -368,7 +368,8 @@ fun DocumentSnapshot.toLottery() = Lottery(
     timeZone = getString("timeZone")?.let { runCatching { ZoneId.of(it) }.getOrNull() },
     waitlistCapacity = getLong("waitlistCapacity")?.toInt(),
     winnerCount = getLong("winnerCount")?.toInt(),
-    drawCompletedAt = get("drawCompletedAt").toInstantOrNull()
+    drawCompletedAt = get("drawCompletedAt").toInstantOrNull(),
+    contributedCampsiteIds = stringList("contributedCampsiteIds")
 )
 
 private fun DocumentSnapshot.toCampsite() = Campsite(

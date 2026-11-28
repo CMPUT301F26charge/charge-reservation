@@ -28,6 +28,8 @@ const val MAX_LOTTERY_CAMPSITES = 9
  * @property winnerCount the number of entrants to select as winners
  * @property drawCompletedAt the instant when the draw completed, or null
  * if it has not completed
+ * @property contributedCampsiteIds the campsite IDs added by other owners. The
+ * creator's editor preserves these when saving shared settings.
  */
 data class Lottery (
     val id: String = "",
@@ -44,5 +46,6 @@ data class Lottery (
     val waitlistCapacity: Int? = null,
     var waitlistSize: Int? = null,
     val winnerCount: Int? = null,
-    val drawCompletedAt: Instant? = null
+    val drawCompletedAt: Instant? = null,
+    val contributedCampsiteIds: List<String> = emptyList()
     )

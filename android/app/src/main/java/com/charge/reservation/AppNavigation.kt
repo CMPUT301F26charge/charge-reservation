@@ -61,6 +61,9 @@ import com.charge.reservation.profile.EditProfileScreen
 import com.charge.reservation.repository.UserProfileRepository
 import com.charge.reservation.notifications.NotificationsRoute
 import com.charge.reservation.owner.OwnerLotteryEntrantsScreen
+import com.charge.reservation.owner.OwnerLotteriesScreen
+import com.charge.reservation.owner.ShareLotteryInvitationScreen
+import com.charge.reservation.owner.JoinSharedLotteryScreen
 import com.charge.reservation.profile.NotificationSettingsScreen
 import com.charge.reservation.profile.PoliciesScreen
 
@@ -84,6 +87,9 @@ fun AppNavigation(
     val currentRoute = currentScreenEntry?.destination?.route
     val showBackButton = currentRoute in listOf(
         "ownerCampsiteDetails/{campsiteId}",
+        "ownerLotteries",
+        "shareLotteryInvitation/{lotteryId}",
+        "joinSharedLottery/{campsiteId}",
         "ownerLotteryEntrants/{lotteryId}",
         "ownerBookedDates/{campsiteId}",
         "createCampsite",
@@ -771,12 +777,58 @@ fun AppNavigation(
                                 },
                                 onRegisterCampsiteClick = {
                                     navController.navigate("createCampsite")
-                                }
+                                },
+                                onViewLotteriesClick = { navController.navigate("ownerLotteries") }
                             )
                         }
                     }
 
 
+                }
+            }
+
+            composable("ownerLotteries") {
+                if (profile.isOwner && !profile.removed) {
+                    OwnerLotteriesScreen(
+                        ownerId = profile.id,
+                        campsites = ownerCampsites,
+                        repository = lotteryRepository,
+                        onCampsiteClick = { campsiteId ->
+                            navController.navigate("ownerCampsiteDetails/${Uri.encode(campsiteId)}")
+                        }
+                    )
+                } else {
+                    Text("Only campsite owners can view their lotteries.")
+                }
+            }
+
+            composable("shareLotteryInvitation/{lotteryId}") { entry ->
+                val lotteryId = entry.arguments?.getString("lotteryId").orEmpty()
+                if (profile.isOwner && !profile.removed && lotteryId.isNotBlank()) {
+                    ShareLotteryInvitationScreen(lotteryId, lotteryRepository)
+                } else {
+                    Text("This lottery invitation is unavailable.")
+                }
+            }
+
+            composable("joinSharedLottery/{campsiteId}") { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId")
+                val campsite = ownerCampsites.firstOrNull {
+                    it.id == campsiteId && it.ownerId == profile.id && !it.removed
+                }
+                when {
+                    !profile.isOwner || profile.removed -> Text("Only campsite owners can join.")
+                    isLoadingOwnerCampsites -> CircularProgressIndicator()
+                    ownerCampsitesError.isNotEmpty() -> Column {
+                        Text(ownerCampsitesError)
+                        Button(onClick = { ownerListRetry++ }) { Text("Retry") }
+                    }
+                    campsite == null -> Text("Campsite unavailable.")
+                    else -> JoinSharedLotteryScreen(campsite, lotteryRepository) {
+                        if (navController.currentBackStackEntry == entry) {
+                            navController.popBackStack()
+                        }
+                    }
                 }
             }
 
@@ -942,6 +994,16 @@ fun AppNavigation(
                                         "createLottery/${Uri.encode(campsite.id)}" +
                                                 "?lotteryId=${Uri.encode(lotteryId)}"
                                     )
+                                }
+                            },
+                            onShareLotteryClick = { lotteryId ->
+                                navController.navigate(
+                                    "shareLotteryInvitation/${Uri.encode(lotteryId)}"
+                                )
+                            },
+                            onJoinSharedLotteryClick = {
+                                campsite?.let {
+                                    navController.navigate("joinSharedLottery/${Uri.encode(it.id)}")
                                 }
                             },
                             onCreateLotteryClick = {

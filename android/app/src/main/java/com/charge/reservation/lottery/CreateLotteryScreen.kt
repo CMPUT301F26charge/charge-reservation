@@ -60,7 +60,7 @@ import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
  * @param lotteryId the stable document ID for this lottery.
  * @param isSaving whether a save is in progress. Disables submission while true.
  * @param errorMessage the save error to display, or an empty string if none.
- * @param savedLottery the initial settings for editing, or null for creation.
+ * @param savedLottery the settings and existing contributions, or null for creation.
  * @param onCreateLottery receives the validated lottery to publish or update.
  * The caller saves it and handles the result.
  */
@@ -85,6 +85,7 @@ fun CreateLotteryScreen(
     val selectedCampsiteIds = checkedCampsiteIds.filter { id ->
         selectableCampsites.any { it.id == id }
     }
+    val contributedCampsiteCount = savedLottery?.contributedCampsiteIds?.size ?: 0
 
     val timeZoneId = rememberSaveable(lotteryId) {
         savedLottery?.timeZone?.id ?: ZoneId.systemDefault().id
@@ -149,6 +150,9 @@ fun CreateLotteryScreen(
         )
 
         Text("Campsites", style = MaterialTheme.typography.titleMedium)
+        if (contributedCampsiteCount > 0) {
+            Text("Campsites contributed by other owners: $contributedCampsiteCount")
+        }
 
         for (site in selectableCampsites) {
             val isSelected = site.id in selectedCampsiteIds
@@ -377,8 +381,8 @@ fun CreateLotteryScreen(
             selectedCampsiteIds.isEmpty() ->
                 "Select at least one campsite."
 
-            selectedCampsiteIds.size > MAX_LOTTERY_CAMPSITES ->
-                "Select up to $MAX_LOTTERY_CAMPSITES campsites."
+            selectedCampsiteIds.size + contributedCampsiteCount > MAX_LOTTERY_CAMPSITES ->
+                "Select up to $MAX_LOTTERY_CAMPSITES campsites, including contributions."
 
             registrationOpensAt == null ->
                 "Select the registration opening date and time."
