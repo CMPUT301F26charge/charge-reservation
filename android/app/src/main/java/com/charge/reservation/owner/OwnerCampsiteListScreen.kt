@@ -26,13 +26,16 @@ import com.charge.reservation.model.Campsite
  *
  * Removed campsites and listings belonging to other owners
  * are excluded.
+ *
+ * @param onViewLotteriesClick opens the owner's created and shared lotteries.
  */
 @Composable
 fun OwnerCampsiteListScreen(
     currentOwnerId: String,
     campsites: List<Campsite>,
     onCampsiteClick: (String) -> Unit,
-    onRegisterCampsiteClick: () -> Unit
+    onRegisterCampsiteClick: () -> Unit,
+    onViewLotteriesClick: () -> Unit
 ) {
     // ADDED: Use testable owner filtering logic.
     val ownerCampsites = OwnerCampsiteFilter.filter(
@@ -54,6 +57,9 @@ fun OwnerCampsiteListScreen(
 
         Button(onClick = onRegisterCampsiteClick) {
             Text("Register a campsite")
+        }
+        Button(onClick = onViewLotteriesClick) {
+            Text("My lotteries")
         }
 
         if (ownerCampsites.isEmpty()) {

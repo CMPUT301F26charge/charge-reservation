@@ -46,6 +46,8 @@ import com.charge.reservation.model.AvailabilityDay
  * @param lotteriesError load failure message, or empty when no error exists.
  * @param onRetryLotteries requests another attempt after a failed load.
  * @param onEditLotteryClick opens the editor for the selected undrawn lottery ID.
+ * @param onShareLotteryClick opens an invitation screen for a creator's lottery.
+ * @param onJoinSharedLotteryClick opens the code form for this campsite.
  */
 @Composable
 fun OwnerCampsiteDetailsScreen(
@@ -61,7 +63,9 @@ fun OwnerCampsiteDetailsScreen(
     onViewBookedDatesClick: () -> Unit,
     onViewEntrantsClick: (String) -> Unit,
     onCreateLotteryClick: () -> Unit,
-    onEditLotteryClick: (String) -> Unit
+    onEditLotteryClick: (String) -> Unit,
+    onShareLotteryClick: (String) -> Unit,
+    onJoinSharedLotteryClick: () -> Unit
 ) {
     var now by remember(campsite?.id) {
         mutableStateOf(Instant.now())
@@ -117,6 +121,9 @@ fun OwnerCampsiteDetailsScreen(
 
         Button(onClick = onCreateLotteryClick) {
             Text("Create lottery")
+        }
+        Button(onClick = onJoinSharedLotteryClick) {
+            Text("Join shared lottery")
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -294,14 +301,21 @@ fun OwnerCampsiteDetailsScreen(
                             Text("Number of winners: ${lottery.winnerCount}")
                             Text("Waitlist limit: ${lottery.waitlistCapacity ?: "No limit"}")
 
-                            if (lottery.drawCompletedAt == null) {
-                                Button(onClick = { onEditLotteryClick(lottery.id) }) {
-                                    Text("Edit lottery")
+                            if (lottery.ownerId == campsite.ownerId) {
+                                if (lottery.drawCompletedAt == null) {
+                                    Button(onClick = { onEditLotteryClick(lottery.id) }) {
+                                        Text("Edit lottery")
+                                    }
+                                    Button(onClick = { onShareLotteryClick(lottery.id) }) {
+                                        Text("Invite another owner")
+                                    }
                                 }
-                            }
 
-                            Button(onClick = { onViewEntrantsClick(lottery.id) }) {
-                                Text("View entrants")
+                                Button(onClick = { onViewEntrantsClick(lottery.id) }) {
+                                    Text("View entrants")
+                                }
+                            } else {
+                                Text("Shared lottery managed by its creator")
                             }
                         }
                     }
