@@ -45,6 +45,7 @@ import com.charge.reservation.model.AvailabilityDay
  * @param isLoadingLotteries whether a lottery request is pending.
  * @param lotteriesError load failure message, or empty when no error exists.
  * @param onRetryLotteries requests another attempt after a failed load.
+ * @param onEditLotteryClick opens the editor for the selected undrawn lottery ID.
  */
 @Composable
 fun OwnerCampsiteDetailsScreen(
@@ -59,7 +60,8 @@ fun OwnerCampsiteDetailsScreen(
     onRetryAvailability: () -> Unit,
     onViewBookedDatesClick: () -> Unit,
     onViewEntrantsClick: (String) -> Unit,
-    onCreateLotteryClick: () -> Unit
+    onCreateLotteryClick: () -> Unit,
+    onEditLotteryClick: (String) -> Unit
 ) {
     var now by remember(campsite?.id) {
         mutableStateOf(Instant.now())
@@ -290,6 +292,13 @@ fun OwnerCampsiteDetailsScreen(
                             )
 
                             Text("Number of winners: ${lottery.winnerCount}")
+                            Text("Waitlist limit: ${lottery.waitlistCapacity ?: "No limit"}")
+
+                            if (lottery.drawCompletedAt == null) {
+                                Button(onClick = { onEditLotteryClick(lottery.id) }) {
+                                    Text("Edit lottery")
+                                }
+                            }
 
                             Button(onClick = { onViewEntrantsClick(lottery.id) }) {
                                 Text("View entrants")

@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+import com.charge.reservation.booking.toLottery
 import com.charge.reservation.model.Lottery
 import com.charge.reservation.model.MAX_LOTTERY_CAMPSITES
 import com.google.firebase.Timestamp
@@ -11,7 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 
 /**
- * Saves lotteries and loads them for campsite details.
+ * Loads, publishes, and updates owner lotteries.
  */
 class LotteryRepository {
     private val firestore = FirebaseFirestore.getInstance()
@@ -39,6 +40,29 @@ class LotteryRepository {
      */
     fun createLottery(
         lottery: Lottery,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) = saveLottery(lottery, isUpdate = false, onSuccess, onFailure)
+
+    /**
+     * Saves new settings for an undrawn lottery owned by [Lottery.ownerId].
+     *
+     * Uses the latest draw state and waitlist count in the transaction. Keeps
+     * the same lottery ID, owner, time zone, and participation records.
+     *
+     * @param lottery the updated campsite IDs and settings.
+     * @param onSuccess called after the update commits.
+     * @param onFailure receives validation or Firestore errors.
+     */
+    fun updateLottery(
+        lottery: Lottery,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) = saveLottery(lottery, isUpdate = true, onSuccess, onFailure)
+
+    private fun saveLottery(
+        lottery: Lottery,
+        isUpdate: Boolean,
         onSuccess: () -> Unit,
         onFailure: (Exception) -> Unit
     ) {
@@ -105,16 +129,10 @@ class LotteryRepository {
             require(capacity == null || capacity > 0) {
                 "Waiting-list capacity must be greater than zero."
             }
-            require(lottery.drawCompletedAt == null) {
-                "A new lottery cannot already have a completed draw."
-            }
-
             val lotteryDocument = firestore.collection("lotteries")
                 .document(lottery.id)
 
-            val lotteryData = mapOf<String, Any?>(
-                "id" to lottery.id,
-                "ownerId" to lottery.ownerId,
+            val settings = mapOf<String, Any?>(
                 "campsiteIds" to campsiteIds,
                 "registrationStartAt" to Timestamp(
                     opens.epochSecond, opens.nano
@@ -127,18 +145,39 @@ class LotteryRepository {
                 ),
                 "bookingStartDate" to checkIn.toString(),
                 "bookingEndDate" to checkout.toString(),
-                "timeZone" to zone.id,
                 "winnerCount" to winnerCount,
-                "waitlistCapacity" to capacity,
-                "waitlistCount" to 0L,
-                "drawCompletedAt" to null
+                "waitlistCapacity" to capacity
             )
 
             firestore.runTransaction { transaction ->
                 val existingLottery = transaction.get(lotteryDocument)
 
-                check(!existingLottery.exists()) {
-                    "A lottery already exists with this ID."
+                if (isUpdate) {
+                    require(existingLottery.exists() &&
+                            existingLottery.getString("ownerId") == lottery.ownerId) {
+                        "Only the owner can edit this lottery."
+                    }
+                    require(existingLottery.get("drawCompletedAt") == null) {
+                        "This lottery has already been drawn and can no longer be edited."
+                    }
+                    require(existingLottery.getString("timeZone") == zone.id) {
+                        "The lottery's time zone changed. Reopen the editor and try again."
+                    }
+
+                    val waitlistCount = existingLottery.getLong("waitlistCount")
+                    require(waitlistCount != null && waitlistCount >= 0L) {
+                        "This lottery's waitlist count is unavailable."
+                    }
+                    require(capacity == null || capacity.toLong() >= waitlistCount) {
+                        "Waitlist limit must be at least $waitlistCount, or blank for no limit."
+                    }
+                } else {
+                    require(lottery.drawCompletedAt == null) {
+                        "A new lottery cannot already have a completed draw."
+                    }
+                    check(!existingLottery.exists()) {
+                        "A lottery already exists with this ID."
+                    }
                 }
 
                 for (campsiteId in campsiteIds) {
@@ -154,7 +193,20 @@ class LotteryRepository {
                     }
                 }
 
-                transaction.set(lotteryDocument, lotteryData)
+                if (isUpdate) {
+                    transaction.update(lotteryDocument, settings)
+                } else {
+                    transaction.set(
+                        lotteryDocument,
+                        settings + mapOf(
+                            "id" to lottery.id,
+                            "ownerId" to lottery.ownerId,
+                            "timeZone" to zone.id,
+                            "waitlistCount" to 0L,
+                            "drawCompletedAt" to null
+                        )
+                    )
+                }
                 Unit
             }
                 .addOnSuccessListener {
@@ -166,6 +218,37 @@ class LotteryRepository {
         } catch (exception: Exception) {
             onFailure(exception)
         }
+    }
+
+    /**
+     * Reads the latest settings before opening an owner's lottery editor.
+     *
+     * @param lotteryId document ID from the owner details page.
+     * @param ownerId the signed-in owner's Firebase Authentication UID.
+     * @param onSuccess receives the saved lottery, including its draw state.
+     * @param onFailure receives a missing lottery, ownership, or Firestore error.
+     */
+    fun getOwnerLottery(
+        lotteryId: String,
+        ownerId: String,
+        onSuccess: (Lottery) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        firestore.collection("lotteries").document(lotteryId)
+            .get(Source.SERVER)
+            .addOnSuccessListener { document ->
+                val lottery = try {
+                    require(document.exists() && document.getString("ownerId") == ownerId) {
+                        "Lottery not found or you don't have permission to edit it."
+                    }
+                    document.toLottery()
+                } catch (exception: Exception) {
+                    onFailure(exception)
+                    return@addOnSuccessListener
+                }
+                onSuccess(lottery)
+            }
+            .addOnFailureListener { onFailure(it) }
     }
 
     /**
