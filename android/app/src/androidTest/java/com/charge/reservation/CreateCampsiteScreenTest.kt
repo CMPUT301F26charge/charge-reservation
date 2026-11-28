@@ -5,9 +5,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.charge.reservation.model.Campsite
 import com.charge.reservation.owner.CreateCampsiteScreen
+import com.charge.reservation.owner.EditCampsiteScreen
 import com.charge.reservation.ui.theme.ChargeReservationTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -15,7 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Tests the campsite details submitted by the campsite creation screen.
+ * Tests the listing details submitted by the campsite creation and edit forms.
  */
 @RunWith(AndroidJUnit4::class)
 class CreateCampsiteScreenTest {
@@ -140,6 +142,45 @@ class CreateCampsiteScreenTest {
                 "Cancel before check-in.",
                 campsite?.cancellationPolicy
             )
+        }
+    }
+
+    @Test
+    fun editDetails_prefillsListingAndSubmitsOnlyEditedFields() {
+        val original = Campsite(
+            id = "existing-site",
+            ownerId = "existing-owner",
+            name = "Pine Grove",
+            description = "A wooded campsite.",
+            location = "Edmonton, Alberta",
+            maxOccupancy = 4,
+            pricePerNight = 25.0
+        )
+        var updatedCampsite: Campsite? = null
+        var editedFields = emptySet<String>()
+
+        composeRule.setContent {
+            ChargeReservationTheme {
+                EditCampsiteScreen(original, isSaving = false, errorMessage = "") { listing, fields, _ ->
+                    updatedCampsite = listing
+                    editedFields = fields
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("A wooded campsite.").assertExists()
+        composeRule.onNodeWithText("Add available nights").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Campsite name")
+            .performScrollTo()
+            .performTextReplacement("  Pine Grove North  ")
+        composeRule.onNodeWithText("Save changes")
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(original.copy(name = "Pine Grove North"), updatedCampsite)
+            assertEquals(setOf("name"), editedFields)
         }
     }
 }

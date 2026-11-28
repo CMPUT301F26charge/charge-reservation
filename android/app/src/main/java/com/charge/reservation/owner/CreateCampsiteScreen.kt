@@ -39,17 +39,14 @@ import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
 
 /**
- * Collects the details, nightly availability, and optional image for a new
- * campsite. The caller saves the listing and reports the result to the screen.
+ * Collects a new campsite listing, its nightly availability, and an optional image.
  *
- * @param ownerId the campsite owner's Firebase Authentication UID.
- * @param campsiteId the stable ID assigned to this campsite before saving.
+ * @param ownerId the owner's Firebase Authentication UID.
+ * @param campsiteId the ID reserved for this listing.
  * @param isSaving whether a save is in progress.
- * @param errorMessage the save error to display, or an empty string if none.
- * @param onCreateCampsite receives the campsite, its nightly availability records,
- * and the selected image URI, or null for the URI if no image was selected.
+ * @param errorMessage the save error, or an empty string.
+ * @param onCreateCampsite receives the listing, nights, and optional image URI.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateCampsiteScreen(
     ownerId: String,
@@ -58,17 +55,80 @@ fun CreateCampsiteScreen(
     errorMessage: String,
     onCreateCampsite: (Campsite, List<AvailabilityDay>, String?) -> Unit
 ) {
-    var name by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var description by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var location by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var latitude by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var longitude by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var maxOccupancy by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var pricePerNight by rememberSaveable(campsiteId) { mutableStateOf("") }
+    CampsiteListingForm(ownerId, campsiteId, null, isSaving, errorMessage) { campsite, nights, imageUri, _ ->
+        onCreateCampsite(campsite, nights, imageUri)
+    }
+}
+
+/**
+ * Prefills the listing form using the owner's saved campsite.
+ *
+ * @param campsite the active campsite being edited.
+ * @param isSaving whether to disable inputs while saving.
+ * @param errorMessage the save error to display without discarding edits.
+ * @param onSaveCampsite receives the edited listing, the fields the owner changed,
+ * and the optional URI of a replacement promotional image.
+ */
+@Composable
+fun EditCampsiteScreen(
+    campsite: Campsite,
+    isSaving: Boolean,
+    errorMessage: String,
+    onSaveCampsite: (Campsite, Set<String>, String?) -> Unit
+) {
+    CampsiteListingForm(campsite.ownerId, campsite.id, campsite, isSaving, errorMessage) { listing, _, imageUri, fields ->
+        onSaveCampsite(listing, fields, imageUri)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CampsiteListingForm(
+    ownerId: String,
+    campsiteId: String,
+    savedCampsite: Campsite?,
+    isSaving: Boolean,
+    errorMessage: String,
+    onSubmit: (Campsite, List<AvailabilityDay>, String?, Set<String>) -> Unit
+) {
+    val isEditing = savedCampsite != null
+    var name by rememberSaveable(campsiteId) { mutableStateOf(savedCampsite?.name.orEmpty()) }
+    var description by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.description.orEmpty())
+    }
+    var location by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.location.orEmpty())
+    }
+    var latitude by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.latitude?.toString().orEmpty())
+    }
+    var longitude by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.longitude?.toString().orEmpty())
+    }
+    var maxOccupancy by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.maxOccupancy?.toString().orEmpty())
+    }
+    var pricePerNight by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.pricePerNight?.toString().orEmpty())
+    }
     var tagInput by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var tags by rememberSaveable(campsiteId) { mutableStateOf<List<String>>(emptyList()) }
-    var rules by rememberSaveable(campsiteId) { mutableStateOf("") }
-    var cancellationPolicy by rememberSaveable(campsiteId) { mutableStateOf("") }
+    var tags by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.tags.orEmpty())
+    }
+    var rules by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.rules.orEmpty())
+    }
+    var cancellationPolicy by rememberSaveable(campsiteId) {
+        mutableStateOf(savedCampsite?.cancellationPolicy.orEmpty())
+    }
+    var editedFields by rememberSaveable(campsiteId) { mutableStateOf(emptyList<String>()) }
+    var removeSavedImage by rememberSaveable(campsiteId) { mutableStateOf(false) }
+
+    fun markEdited(field: String) {
+        if (isEditing && field !in editedFields) {
+            editedFields = editedFields + field
+        }
+    }
 
     var showCalendar by rememberSaveable(campsiteId) {
         mutableStateOf(false)
@@ -87,8 +147,12 @@ fun CreateCampsiteScreen(
     ) { uri ->
         if (uri != null) {
             selectedImageUri = uri.toString()
+            markEdited("promoImageUrls")
         }
     }
+    val savedImageUrls = savedCampsite?.promoImageUrls.orEmpty()
+    val previewImage = selectedImageUri ?: savedImageUrls.firstOrNull()
+        ?.takeUnless { removeSavedImage }
 
 
     Column(
@@ -100,13 +164,16 @@ fun CreateCampsiteScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ){
         Text(
-            text = "Register a campsite",
+            text = if (isEditing) "Edit campsite" else "Register a campsite",
             style = MaterialTheme.typography.headlineSmall
         )
 
         OutlinedTextField(
             value = name,
-            onValueChange = { name = it },
+            onValueChange = {
+                name = it
+                markEdited("name")
+            },
             label = { Text("Campsite name") },
             singleLine = true,
             enabled = !isSaving,
@@ -115,7 +182,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = description,
-            onValueChange = { description = it },
+            onValueChange = {
+                description = it
+                markEdited("description")
+            },
             label = { Text("Description") },
             minLines = 2,
             enabled = !isSaving,
@@ -135,7 +205,7 @@ fun CreateCampsiteScreen(
             }
         ) {
             Text(
-                if (selectedImageUri == null) {
+                if (previewImage == null) {
                     "Choose image"
                 } else {
                     "Change image"
@@ -143,10 +213,10 @@ fun CreateCampsiteScreen(
             )
         }
 
-        selectedImageUri?.let { imageUri ->
+        previewImage?.let { image ->
             AsyncImage(
-                model = imageUri,
-                contentDescription = "Selected campsite promotional image",
+                model = image,
+                contentDescription = "Campsite promotional image",
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp),
@@ -155,7 +225,11 @@ fun CreateCampsiteScreen(
 
             TextButton(
                 enabled = !isSaving,
-                onClick = { selectedImageUri = null }
+                onClick = {
+                    selectedImageUri = null
+                    removeSavedImage = true
+                    markEdited("promoImageUrls")
+                }
             ) {
                 Text("Remove image")
             }
@@ -163,7 +237,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = location,
-            onValueChange = { location = it },
+            onValueChange = {
+                location = it
+                markEdited("location")
+            },
             label = { Text("Location") },
             singleLine = true,
             enabled = !isSaving,
@@ -172,7 +249,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = latitude,
-            onValueChange = { latitude = it },
+            onValueChange = {
+                latitude = it
+                markEdited("latitude")
+            },
             label = { Text("Latitude") },
             singleLine = true,
             enabled = !isSaving,
@@ -181,7 +261,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = longitude,
-            onValueChange = { longitude = it },
+            onValueChange = {
+                longitude = it
+                markEdited("longitude")
+            },
             label = { Text("Longitude") },
             singleLine = true,
             enabled = !isSaving,
@@ -190,7 +273,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = maxOccupancy,
-            onValueChange = { maxOccupancy = it },
+            onValueChange = {
+                maxOccupancy = it
+                markEdited("maxOccupancy")
+            },
             label = { Text("Maximum occupancy") },
             singleLine = true,
             enabled = !isSaving,
@@ -199,66 +285,71 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = pricePerNight,
-            onValueChange = { pricePerNight = it },
+            onValueChange = {
+                pricePerNight = it
+                markEdited("pricePerNight")
+            },
             label = { Text("Price per night") },
             singleLine = true,
             enabled = !isSaving,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Button(
-            enabled = !isSaving,
-            onClick = { showCalendar = true }
-        ) {
-            Text("Add available nights")
-        }
+        if (!isEditing) {
+            Button(
+                enabled = !isSaving,
+                onClick = { showCalendar = true }
+            ) {
+                Text("Add available nights")
+            }
 
-        if (availableNights.isNotEmpty()) {
-            Text("Nightly guest capacity")
+            if (availableNights.isNotEmpty()) {
+                Text("Nightly guest capacity")
 
-            availableNights.forEach { night ->
-                val maximum = maxOccupancy.trim().toIntOrNull()
-                val input = nightlyCapacity[night] ?: maxOccupancy.trim()
-                val capacity = input.trim().toIntOrNull()
+                availableNights.forEach { night ->
+                    val maximum = maxOccupancy.trim().toIntOrNull()
+                    val input = nightlyCapacity[night] ?: maxOccupancy.trim()
+                    val capacity = input.trim().toIntOrNull()
 
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { newValue ->
-                        nightlyCapacity =
-                            HashMap(nightlyCapacity).apply {
-                                put(night, newValue)
-                            }
-                    },
-                    label = { Text("Guest capacity on $night") },
-                    supportingText = {
-                        Text(
-                            if (maximum == null || maximum <= 0) {
-                                "Enter a positive maximum occupancy first."
-                            } else {
-                                "Enter 0 to $maximum guests. 0 means unavailable."
-                            }
-                        )
-                    },
-                    isError = maximum == null ||
-                            maximum <= 0 ||
-                            capacity == null ||
-                            capacity !in 0..maximum,
-                    singleLine = true,
-                    enabled = !isSaving,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = { newValue ->
+                            nightlyCapacity =
+                                HashMap(nightlyCapacity).apply {
+                                    put(night, newValue)
+                                }
+                        },
+                        label = { Text("Guest capacity on $night") },
+                        supportingText = {
+                            Text(
+                                if (maximum == null || maximum <= 0) {
+                                    "Enter a positive maximum occupancy first."
+                                } else {
+                                    "Enter 0 to $maximum guests. 0 means unavailable."
+                                }
+                            )
+                        },
+                        isError = maximum == null ||
+                                maximum <= 0 ||
+                                capacity == null ||
+                                capacity !in 0..maximum,
+                        singleLine = true,
+                        enabled = !isSaving,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                TextButton(
-                    enabled = !isSaving,
-                    onClick = {
-                        availableNights = availableNights - night
-                        nightlyCapacity =
-                            HashMap(nightlyCapacity).apply {
-                                remove(night)
-                            }
+                    TextButton(
+                        enabled = !isSaving,
+                        onClick = {
+                            availableNights = availableNights - night
+                            nightlyCapacity =
+                                HashMap(nightlyCapacity).apply {
+                                    remove(night)
+                                }
+                        }
+                    ) {
+                        Text("Remove $night")
                     }
-                ) {
-                    Text("Remove $night")
                 }
             }
         }
@@ -279,6 +370,7 @@ fun CreateCampsiteScreen(
 
                 if (enterTag.isNotBlank() && enterTag !in tags) {
                     tags = tags + enterTag
+                    markEdited("tags")
                 }
 
                 tagInput = ""
@@ -297,6 +389,7 @@ fun CreateCampsiteScreen(
                 enabled = !isSaving,
                 onClick = {
                     tags = tags - tag
+                    markEdited("tags")
                 },
                 label = {Text(tag)},
                 trailingIcon = {Text("x")}
@@ -305,7 +398,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = rules,
-            onValueChange = { rules = it },
+            onValueChange = {
+                rules = it
+                markEdited("rules")
+            },
             label = { Text("Rules") },
             minLines = 2,
             enabled = !isSaving,
@@ -314,7 +410,10 @@ fun CreateCampsiteScreen(
 
         OutlinedTextField(
             value = cancellationPolicy,
-            onValueChange = { cancellationPolicy = it },
+            onValueChange = {
+                cancellationPolicy = it
+                markEdited("cancellationPolicy")
+            },
             label = { Text("Cancellation policy") },
             minLines = 2,
             enabled = !isSaving,
@@ -343,6 +442,7 @@ fun CreateCampsiteScreen(
                     maxOccupancy = maxOccupancy.trim().toIntOrNull(),
                     pricePerNight = pricePerNight.trim().toDoubleOrNull(),
                     tags = enterTags,
+                    promoImageUrls = if (removeSavedImage) emptyList() else savedImageUrls,
                     rules = rules.trim(),
                     cancellationPolicy = cancellationPolicy.trim()
                 )
@@ -357,10 +457,19 @@ fun CreateCampsiteScreen(
                         bookedGuests = 0
                     )
                 }
-                onCreateCampsite(campsite, availabilityDays, selectedImageUri)
+                if (tagInput.isNotBlank() && enterTags != tags) {
+                    markEdited("tags")
+                }
+                onSubmit(campsite, availabilityDays, selectedImageUri, editedFields.toSet())
             }
         ) {
-            Text(if (isSaving) "Saving..." else "Create Campsite")
+            Text(
+                when {
+                    isSaving -> "Saving..."
+                    isEditing -> "Save changes"
+                    else -> "Create Campsite"
+                }
+            )
         }
 
         if (showCalendar) {

@@ -43,6 +43,7 @@ import com.charge.reservation.model.UserProfile
 import com.charge.reservation.repository.CampsiteRepository
 import com.charge.reservation.model.AvailabilityDay
 import com.charge.reservation.owner.CreateCampsiteScreen
+import com.charge.reservation.owner.EditCampsiteScreen
 import com.charge.reservation.ui.AppBottomBar
 import com.charge.reservation.profile.ProfileMenuScreen
 import com.charge.reservation.admin.AdminMenuScreen
@@ -93,6 +94,7 @@ fun AppNavigation(
         "ownerLotteryEntrants/{lotteryId}",
         "ownerBookedDates/{campsiteId}",
         "createCampsite",
+        "editCampsite/{campsiteId}",
         LOTTERY_FORM_ROUTE,
         "lotteryNotification/{lotteryId}",
         "personalInfo",
@@ -983,6 +985,11 @@ fun AppNavigation(
                                     )
                                 }
                             },
+                            onEditCampsiteClick = {
+                                campsite?.let {
+                                    navController.navigate("editCampsite/${Uri.encode(it.id)}")
+                                }
+                            },
                             onViewEntrantsClick = { lotteryId ->
                                 navController.navigate(
                                     "ownerLotteryEntrants/${Uri.encode(lotteryId)}"
@@ -1230,6 +1237,53 @@ fun AppNavigation(
                                 }
                             }
                         )
+                    }
+                }
+            }
+
+            composable("editCampsite/{campsiteId}") { entry ->
+                val campsiteId = entry.arguments?.getString("campsiteId")
+                val campsite = ownerCampsites.firstOrNull {
+                    it.id == campsiteId && it.ownerId == profile.id && !it.removed
+                }
+
+                when {
+                    !profile.isOwner || profile.removed -> {
+                        Text("Only campsite owners can edit their listings.")
+                    }
+                    isLoadingOwnerCampsites -> CircularProgressIndicator()
+                    ownerCampsitesError.isNotEmpty() -> Column {
+                        Text(ownerCampsitesError)
+                        Button(onClick = { ownerListRetry++ }) { Text("Retry") }
+                    }
+                    campsite == null -> Text("Campsite unavailable.")
+                    else -> {
+                        var isSaving by remember { mutableStateOf(false) }
+                        var errorMessage by rememberSaveable(campsite.id) { mutableStateOf("") }
+
+                        EditCampsiteScreen(campsite, isSaving, errorMessage) { listing, fields, imageUri ->
+                            if (!isSaving) {
+                                isSaving = true
+                                errorMessage = ""
+                                campsiteRepository.updateCampsite(
+                                    campsite = listing,
+                                    editedFields = fields,
+                                    imageUri = imageUri,
+                                    onSuccess = {
+                                        isSaving = false
+                                        if (navController.currentBackStackEntry == entry) {
+                                            navController.popBackStack()
+                                        }
+                                    },
+                                    onFailure = { exception ->
+                                        Log.e("CampsiteEdit", "Could not update campsite", exception)
+                                        isSaving = false
+                                        errorMessage = (exception as? IllegalArgumentException)?.message
+                                            ?: "Could not save changes. Please try again."
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

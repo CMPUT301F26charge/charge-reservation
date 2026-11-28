@@ -41,6 +41,7 @@ import com.charge.reservation.model.AvailabilityDay
  * Registration status uses the device clock and refreshes
  * once per second while the screen is composed.
  *
+ * @param onEditCampsiteClick opens the editor for this campsite.
  * @param lotteries saved lotteries associated with this campsite.
  * @param isLoadingLotteries whether a lottery request is pending.
  * @param lotteriesError load failure message, or empty when no error exists.
@@ -62,6 +63,7 @@ fun OwnerCampsiteDetailsScreen(
     onRetryAvailability: () -> Unit,
     onViewBookedDatesClick: () -> Unit,
     onViewEntrantsClick: (String) -> Unit,
+    onEditCampsiteClick: () -> Unit,
     onCreateLotteryClick: () -> Unit,
     onEditLotteryClick: (String) -> Unit,
     onShareLotteryClick: (String) -> Unit,
@@ -99,6 +101,10 @@ fun OwnerCampsiteDetailsScreen(
             text = campsite.name,
             fontSize = 24.sp
         )
+
+        Button(onClick = onEditCampsiteClick) {
+            Text("Edit campsite")
+        }
 
         Button(onClick = onViewBookedDatesClick) {
             Text("View booked dates")

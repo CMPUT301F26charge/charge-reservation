@@ -12,7 +12,7 @@ import com.charge.reservation.model.Campsite
 import com.charge.reservation.model.AvailabilityDay
 
 /**
- * Handles campsite listings stored in Firestore.
+ * Creates, updates, and reads campsite listings stored in Firestore.
  */
 class CampsiteRepository {
     private val firestore = FirebaseFirestore.getInstance()
@@ -42,38 +42,8 @@ class CampsiteRepository {
         onSuccess:() -> Unit,
         onFailure: (Exception) -> Unit
     ) {
-        val price = campsite.pricePerNight
-        val latitude = campsite.latitude
-        val longitude = campsite.longitude
-        val maximumGuests = campsite.maxOccupancy?:0
-        // Identify missing required information before contacting Firestore.
-        val validationError = when {
-            campsite.id.isBlank() -> "Campsite ID must not be blank."
-
-            campsite.ownerId.isBlank() -> "Owner ID must not be blank."
-
-            campsite.name.isBlank() -> "Please enter the campsite name."
-
-            campsite.description.isBlank() -> "Please enter the campsite description."
-
-            campsite.location.isBlank() -> "Please enter the campsite location."
-
-            latitude == null || !latitude.isFinite() || latitude !in -90.0..90.0 ->
-                "Please enter a latitude between -90 and 90."
-
-            longitude == null || !longitude.isFinite() || longitude !in -180.0..180.0 ->
-                "Please enter a longitude between -180 and 180."
-
-            (campsite.maxOccupancy ?: 0) <= 0 ->
-                "Please enter a positive whole number for maximum occupancy."
-
-            price == null || !price.isFinite() || price < 0.0 ->
-                "Please enter a valid price of 0 or more."
-
-            campsite.rules.isBlank() -> "Please enter the campsite rules."
-
-            campsite.cancellationPolicy.isBlank() -> "Please enter the cancellation policy."
-
+        val maximumGuests = campsite.maxOccupancy ?: 0
+        val validationError = listingValidationError(campsite, listingFields(campsite).keys) ?: when {
             availabilityDays.isEmpty() ->
                 "Please select at least one available night."
 
@@ -101,15 +71,127 @@ class CampsiteRepository {
         }
 
         if (imageUri == null) {
-            saveCampsite(
-                campsite = campsite,
-                availabilityDays = availabilityDays,
-                onSuccess = onSuccess,
-                onFailure = onFailure
-            )
+            saveCampsite(campsite, availabilityDays, onSuccess, onFailure)
             return
         }
 
+        uploadCampsiteImage(campsite, imageUri, onSuccess = { url ->
+            saveCampsite(
+                campsite.copy(promoImageUrls = listOf(url)),
+                availabilityDays,
+                onSuccess,
+                onFailure
+            )
+        }, onFailure = onFailure)
+    }
+
+    /**
+     * Updates the selected listing fields on an existing campsite document.
+     *
+     * @param campsite the edited listing, including its original ID and owner.
+     * @param editedFields the listing fields the owner changed in the form.
+     * @param imageUri the selected replacement image URI, or null to skip uploading.
+     * @param onSuccess called after the update succeeds, including an edit with no changes.
+     * @param onFailure receives validation, upload, permission, or Firestore errors.
+     */
+    fun updateCampsite(
+        campsite: Campsite,
+        editedFields: Set<String>,
+        imageUri: String?,
+        onSuccess: () -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val fields = if (imageUri == null) editedFields else editedFields + "promoImageUrls"
+        val listing = listingFields(campsite)
+
+        val validationError = if (!listing.keys.containsAll(fields)) {
+            "This update contains an invalid campsite field."
+        } else {
+            listingValidationError(campsite, fields)
+        }
+        if (validationError != null) {
+            onFailure(IllegalArgumentException(validationError))
+            return
+        }
+
+        val changes = listing.filterKeys { it in fields }
+        if (changes.isEmpty()) {
+            onSuccess()
+            return
+        }
+
+        val campsiteDocument = firestore.collection("campsites").document(campsite.id)
+        fun save(replacementUrl: String?) {
+            val values = if (replacementUrl == null) {
+                changes
+            } else {
+                changes + ("promoImageUrls" to listOf(replacementUrl))
+            }
+            campsiteDocument.update(values)
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { onFailure(it) }
+        }
+
+        if (imageUri == null) {
+            save(null)
+        } else {
+            uploadCampsiteImage(campsite, imageUri, onSuccess = { url -> save(url) }, onFailure)
+        }
+    }
+
+    private fun listingFields(campsite: Campsite): Map<String, Any?> = mapOf(
+        "name" to campsite.name,
+        "description" to campsite.description,
+        "promoImageUrls" to campsite.promoImageUrls,
+        "tags" to campsite.tags,
+        "maxOccupancy" to campsite.maxOccupancy,
+        "pricePerNight" to campsite.pricePerNight,
+        "location" to campsite.location,
+        "latitude" to campsite.latitude,
+        "longitude" to campsite.longitude,
+        "rules" to campsite.rules,
+        "cancellationPolicy" to campsite.cancellationPolicy
+    )
+
+    /** Validates all listing fields on creation and the edited fields on update. */
+    private fun listingValidationError(campsite: Campsite, fields: Set<String>): String? {
+        val latitude = campsite.latitude
+        val longitude = campsite.longitude
+        val price = campsite.pricePerNight
+
+        return when {
+            campsite.id.isBlank() -> "Campsite ID must not be blank."
+            campsite.ownerId.isBlank() -> "Owner ID must not be blank."
+            "name" in fields && campsite.name.isBlank() -> "Please enter the campsite name."
+            "description" in fields && campsite.description.isBlank() ->
+                "Please enter the campsite description."
+            "location" in fields && campsite.location.isBlank() ->
+                "Please enter the campsite location."
+            "latitude" in fields &&
+                    (latitude == null || !latitude.isFinite() || latitude !in -90.0..90.0) ->
+                "Please enter a latitude between -90 and 90."
+            "longitude" in fields &&
+                    (longitude == null || !longitude.isFinite() || longitude !in -180.0..180.0) ->
+                "Please enter a longitude between -180 and 180."
+            "maxOccupancy" in fields && (campsite.maxOccupancy ?: 0) <= 0 ->
+                "Please enter a positive whole number for maximum occupancy."
+            "pricePerNight" in fields && (price == null || !price.isFinite() || price < 0.0) ->
+                "Please enter a valid price of 0 or more."
+            "rules" in fields && campsite.rules.isBlank() ->
+                "Please enter the campsite rules."
+            "cancellationPolicy" in fields && campsite.cancellationPolicy.isBlank() ->
+                "Please enter the cancellation policy."
+            else -> null
+        }
+    }
+
+    /** Uploads one image to a new Storage object and returns its download URL. */
+    private fun uploadCampsiteImage(
+        campsite: Campsite,
+        imageUri: String,
+        onSuccess: (String) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
         try {
             val imageReference = FirebaseStorage.getInstance().reference
                 .child("campsiteImages")
@@ -120,27 +202,12 @@ class CampsiteRepository {
             imageReference.putFile(Uri.parse(imageUri))
                 .continueWithTask { task ->
                     if (!task.isSuccessful) {
-                        throw (
-                                task.exception
-                                    ?: IllegalStateException("Image upload failed.")
-                                )
+                        throw (task.exception ?: IllegalStateException("Image upload failed."))
                     }
-
                     imageReference.downloadUrl
                 }
-                .addOnSuccessListener { downloadUri ->
-                    saveCampsite(
-                        campsite = campsite.copy(
-                            promoImageUrls = listOf(downloadUri.toString())
-                        ),
-                        availabilityDays = availabilityDays,
-                        onSuccess = onSuccess,
-                        onFailure = onFailure
-                    )
-                }
-                .addOnFailureListener { exception ->
-                    onFailure(exception)
-                }
+                .addOnSuccessListener { downloadUri -> onSuccess(downloadUri.toString()) }
+                .addOnFailureListener { onFailure(it) }
         } catch (exception: Exception) {
             onFailure(exception)
         }
@@ -158,20 +225,9 @@ class CampsiteRepository {
         val campsiteDocument = firestore.collection("campsites")
             .document(campsite.id)
 
-        val campsiteData = mapOf<String, Any?>(
+        val campsiteData = listingFields(campsite) + mapOf(
             "id" to campsite.id,
             "ownerId" to campsite.ownerId,
-            "name" to campsite.name,
-            "description" to campsite.description,
-            "promoImageUrls" to campsite.promoImageUrls,
-            "tags" to campsite.tags,
-            "maxOccupancy" to campsite.maxOccupancy,
-            "pricePerNight" to campsite.pricePerNight,
-            "location" to campsite.location,
-            "latitude" to campsite.latitude,
-            "longitude" to campsite.longitude,
-            "rules" to campsite.rules,
-            "cancellationPolicy" to campsite.cancellationPolicy,
             "averageRating" to null,
             "removed" to false
         )

@@ -57,7 +57,8 @@ data class NightOption(
     val capacity: Int,
     val booked: Int
 ) {
-    val remaining: Int get() = capacity - booked
+    /** Places still bookable, including when existing bookings exceed a newer limit. */
+    val remaining: Int get() = (capacity - booked).coerceAtLeast(0)
 }
 
 class InvitationBookingRepository(
@@ -143,6 +144,12 @@ class InvitationBookingRepository(
         val today = LocalDate.now(lottery.timeZone ?: ZoneId.systemDefault())
         val earliest = maxOf(windowStart, today)
 
+        val maxOccupancy = db.collection(FirestorePaths.CAMPSITES)
+            .document(campsiteId)
+            .get(Source.SERVER)
+            .await()
+            .getLong("maxOccupancy")
+
         // Each campsite keeps its own nights in campsites/{campsiteId}/availability,
         // so the whole subcollection is read and date filtering is done here.
         return availabilityOf(campsiteId)
@@ -158,7 +165,10 @@ class InvitationBookingRepository(
                         null
                     }
                     date.isBefore(earliest) || !date.isBefore(lastCheckOut) -> null
-                    else -> NightOption(doc.id, date, capacity, day.bookedGuests)
+                    else -> {
+                        val limit = minOf(capacity.toLong(), maxOccupancy ?: Long.MAX_VALUE)
+                        NightOption(doc.id, date, limit.toInt(), day.bookedGuests)
+                    }
                 }
             }
             .sortedBy { it.date }
@@ -284,7 +294,8 @@ class InvitationBookingRepository(
                     day.campsiteId != campsite.id ||
                     capacity == null ||
                     day.bookedGuests !in 0..capacity ||
-                    capacity - day.bookedGuests < guestCount
+                    minOf(capacity.toLong(), maxOccupancy ?: Long.MAX_VALUE) -
+                        day.bookedGuests < guestCount
                 ) {
                     throw BookingException(
                         "$requestedDate no longer has room for $guestCount guests."
